@@ -11,10 +11,8 @@
 #define MIP6_SEQ_GT(x,y) ((short int)(((uint16_t)(x)) - ((uint16_t)(y))) > 0)
 
 /* If new types or options appear, these should be updated. */
-#define IP6_MH_TYPE_MAX IP6_MH_TYPE_PBRES
-//#define IP6_MH_TYPE_MAX IP6_MH_TYPE_BERROR
-//#define IP6_MHOPT_MAX IP6_MHOPT_BAUTH
 //For PMIP
+#define IP6_MH_TYPE_MAX IP6_MH_TYPE_PBRES
 #define IP6_MHOPT_MAX IP6_MHOPT_PMIP_MAX
 
 struct sock {
@@ -84,6 +82,11 @@ int mh_create_opt_nonce_index(struct iovec *iov, uint16_t home_nonce,
 
 int mh_create_opt_auth_data(struct iovec *iov);
 
+struct list_head;
+
+int mh_create_opt_mob_net_prefix(struct iovec *iov, int mnp_count,
+				 struct list_head *mnps);
+
 static inline void *mh_opt(const struct ip6_mh *mh,
 			   const struct mh_options *mh_opts, uint8_t type)
 {
@@ -128,10 +131,13 @@ int mh_bu_parse(struct ip6_mh_binding_update *bu, ssize_t len,
 		const struct in6_addr_bundle *in_addrs,
 		struct in6_addr_bundle *out_addrs,
 		struct mh_options *mh_opts,
-		struct timespec *lifetime,
-		uint8_t *key);
+		struct timespec *lifetime);
 
 void mh_handler_reg(uint8_t type, struct mh_handler *handler);
 void mh_handler_dereg(uint8_t type, struct mh_handler *handler);
+
+/* Some debug helper for BA status */
+#define MAX_BA_STATUS_STR_LEN 64
+void mh_ba_status_to_str(int status, char *err_str);
 
 #endif

@@ -46,6 +46,15 @@
 #include "retrout.h"
 #include "cn.h"
 #include "conf.h"
+#include "statistics.h"
+
+#define MH_DEBUG_LEVEL 1
+
+#if MH_DEBUG_LEVEL >= 1
+#define MDBG dbg
+#else
+#define MDBG(x...)
+#endif
 
 #define ICMP_ERROR_PERSISTENT_THRESHOLD 3
 
@@ -53,9 +62,10 @@ const struct timespec cn_brr_before_expiry_ts =
 { CN_BRR_BEFORE_EXPIRY, 0 };
 
 static void cn_recv_dst_unreach(const struct icmp6_hdr *ih, ssize_t len,
-				const struct in6_addr *src, 
-				const struct in6_addr *dst,
-				int iif, int hoplimit)
+				__attribute__ ((unused)) const struct in6_addr *src,
+				__attribute__ ((unused)) const struct in6_addr *dst,
+				__attribute__ ((unused)) int iif,
+				__attribute__ ((unused)) int hoplimit)
 {
 	struct ip6_hdr *ip6h = (struct ip6_hdr *)(ih + 1);
 	int optlen = len - sizeof(struct icmp6_hdr);
@@ -98,7 +108,10 @@ static void cn_recv_hoti(const struct ip6_mh *mh, ssize_t len,
 	struct iovec iov;
 	uint8_t keygen_token[8];
 
-	if (len < sizeof(struct ip6_mh_home_test_init) || in->remote_coa)
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_HOTI);
+
+	if (len < 0 || (size_t)len < sizeof(struct ip6_mh_home_test_init) ||
+	    in->remote_coa)
 		return;
 	out.src = in->dst;
 	out.dst = in->src;
@@ -113,6 +126,7 @@ static void cn_recv_hoti(const struct ip6_mh *mh, ssize_t len,
 	memcpy(hot->ip6mhht_keygen, keygen_token, 8);
 	mh_send(&out, &iov, 1, NULL, iif);
 	free_iov_data(&iov, 1);
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_OUT_HOT);
 }
 
 static struct mh_handler cn_hoti_handler = {
@@ -128,7 +142,10 @@ static void cn_recv_coti(const struct ip6_mh *mh, ssize_t len,
 	struct iovec iov;
 	uint8_t keygen_token[8];
 
-	if (len < sizeof(struct ip6_mh_careof_test_init) || in->remote_coa)
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_COTI);
+
+	if (len < 0 || (size_t)len < sizeof(struct ip6_mh_careof_test_init) ||
+	    in->remote_coa)
 		return;
 	out.src = in->dst;
 	out.dst = in->src;
@@ -143,11 +160,78 @@ static void cn_recv_coti(const struct ip6_mh *mh, ssize_t len,
 	memcpy(cot->ip6mhct_keygen, keygen_token, 8);
 	mh_send(&out, &iov, 1, NULL, iif);
 	free_iov_data(&iov, 1);
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_OUT_COT);
 }
 
 static struct mh_handler cn_coti_handler = {
 	.recv = cn_recv_coti,
 };
+
+/* After parsing, perform CN-specific checks (flags and auth + nonce) on BU.
+ * -1 is returned if the BU needs to be silently dropped. Otherwise, a BA
+ * status code is returned. If it is an error code, the BU should be dropped */
+static int cn_bu_check(struct ip6_mh_binding_update *bu, ssize_t len,
+		       struct mh_options *mh_opts,
+		       struct in6_addr *peer_addr,
+		       struct in6_addr *our_addr,
+		       struct in6_addr *bind_coa,
+		       struct timespec *lifetime, uint8_t *key)
+{
+	struct ip6_mh_opt_nonce_index *non_ind;
+	struct ip6_mh_opt_auth_data *bauth;
+	int ret;
+
+	non_ind = mh_opt(&bu->ip6mhbu_hdr, mh_opts, IP6_MHOPT_NONCEID);
+
+	if (bu->ip6mhbu_flags & IP6_MH_BU_HOME) {
+		if (non_ind) {
+			/* BU w/ Nonce and H bit set. It is simply invalid.
+			 * Drop it. This matches behavior expectedin TAHI
+			 * CN tests: 5-3-4, 5-3-5, 5-3-6 */
+			return -1;
+		}
+		/* Now, as a CN, we are receiving a BU intended for a HA.
+		 * We will send a BA to report the error. If the peer is
+		 * already registered: registration type change is not
+		 * allowed (TAHI CN tests 5-3-2, 5-3-3). If peer is unknown
+		 * to us, just warn we are not a HA (TAHI CN Test 5-3-1) */
+		if (bce_exists(our_addr, peer_addr))
+			return IP6_MH_BAS_REG_NOT_ALLOWED;
+		else
+			return IP6_MH_BAS_HA_NOT_SUPPORTED;
+	}
+
+	if (!non_ind)
+		return -1;
+
+	/* We could also test if BU has R flag set (NEMO) and drop
+	 * it in that case. We just act as expected by RFC 3775, i.e.
+	 * just don't consider the value of the flag --arno */
+
+	MDBG("src %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(peer_addr));
+	MDBG("coa %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(bind_coa));
+
+	if (tsisset(*lifetime))
+		ret = rr_cn_calc_Kbm(ntohs(non_ind->ip6moni_home_nonce),
+				     ntohs(non_ind->ip6moni_coa_nonce),
+				     peer_addr, bind_coa, key);
+	else /* Only use home nonce and address for dereg. */
+		ret = rr_cn_calc_Kbm(ntohs(non_ind->ip6moni_home_nonce), 0,
+				     peer_addr, NULL, key);
+	if (ret)
+		return ret;
+
+	bauth = mh_opt(&bu->ip6mhbu_hdr, mh_opts, IP6_MHOPT_BAUTH);
+	if (!bauth)
+		return -1;
+
+	/* Authenticator is calculated with MH checksum set to 0 */
+	bu->ip6mhbu_hdr.ip6mh_cksum = 0;
+	if (mh_verify_auth_data(bu, len, bauth, bind_coa, our_addr, key) < 0)
+		return -1;
+
+	return IP6_MH_BAS_ACCEPTED;
+}
 
 void cn_recv_bu(const struct ip6_mh *mh, ssize_t len,
 		const struct in6_addr_bundle *in, int iif)
@@ -163,10 +247,15 @@ void cn_recv_bu(const struct ip6_mh *mh, ssize_t len,
 	uint8_t key[HMAC_SHA1_KEY_SIZE];
 	uint8_t *pkey = NULL;
 
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_BU);
+
 	bu = (struct ip6_mh_binding_update *)mh;
 
-	status = mh_bu_parse(bu, len, in, &out, &mh_opts, &lft, key);
-	if (status < 0)
+	if (mh_bu_parse(bu, len, in, &out, &mh_opts, &lft) < 0)
+		return;
+
+	if ((status = cn_bu_check(bu, len, &mh_opts, out.dst, out.src,
+				  out.bind_coa, &lft, key)) < 0)
 		return;
 
 	seqno = ntohs(bu->ip6mhbu_seqno);
@@ -177,13 +266,6 @@ void cn_recv_bu(const struct ip6_mh *mh, ssize_t len,
 	non_ind = mh_opt(&bu->ip6mhbu_hdr, &mh_opts, IP6_MHOPT_NONCEID);
 	bce = bcache_get(out.src, out.dst);
 	if (bce) {
-		if ((bce->flags^bu_flags) & IP6_MH_BU_HOME) {
-			/* H-bit mismatch, flags changed */
-			bcache_release_entry(bce);
-			bce = NULL;
-			status = IP6_MH_BAS_REG_NOT_ALLOWED;
-			goto send_nack;
-		}
 		if (!MIP6_SEQ_GT(seqno, bce->seqno)) {
 			uint16_t nonce_hoa;
 			if (bce->type != BCE_NONCE_BLOCK) {
@@ -200,8 +282,7 @@ void cn_recv_bu(const struct ip6_mh *mh, ssize_t len,
 			 * have been used before with the same home address.
 			 * This is more strict than the draft, but otherwise
 			 * we would need to store all non-expired home kgen
-			 * tokens mn had used before deregistration.
-			 */
+			 * tokens mn had used before deregistration. */
 			nonce_hoa = ntohs(non_ind->ip6moni_home_nonce);
 			if (bce->nonce_hoa == nonce_hoa) {
 				bcache_release_entry(bce);
@@ -221,10 +302,8 @@ void cn_recv_bu(const struct ip6_mh *mh, ssize_t len,
 			/* else get rid of it */
 			bcache_delete(out.src, out.dst);
 		}
-	} else if (bu_flags & IP6_MH_BU_HOME) {
-		status = IP6_MH_BAS_HA_NOT_SUPPORTED;
-		goto send_nack;
 	}
+
 	status = conf.pmgr.discard_binding(out.dst, out.bind_coa,
 					   out.src, bu, len);
 

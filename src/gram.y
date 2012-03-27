@@ -48,10 +48,10 @@
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
+#include <stdio.h>
 #include <pthread.h>
 #include <netinet/in.h>
 #include <net/if.h>
-#include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
 #include <netinet/ip6mh.h>
@@ -69,11 +69,27 @@
 struct net_iface ni = {
 	.mip6_if_entity = MIP6_ENTITY_NO,
 	.mn_if_preference = POL_MN_IF_DEF_PREFERENCE,
+	.is_tunnel = 0,
 };
 
 struct home_addr_info hai = {
-	.ro_policies = LIST_HEAD_INIT(hai.ro_policies)
+	.ro_policies = LIST_HEAD_INIT(hai.ro_policies),
+	.mob_net_prefixes = LIST_HEAD_INIT(hai.mob_net_prefixes)
 };
+
+LIST_HEAD(prefixes);
+
+int mv_prefixes(struct list_head *list)
+{
+	struct list_head *l, *n;
+	int res = 0;
+	list_for_each_safe(l, n, &prefixes) {
+		list_del(l);
+		list_add_tail(l, list);
+		res++;
+	}
+	return res;
+}
 
 struct policy_bind_acl_entry *bae = NULL;
 
@@ -89,20 +105,24 @@ struct ipsec_policy_set ipsec_ps = {
 
 extern int lineno;
 extern char *yytext;
+extern char *incl_file; /* If not NULL, name of included file being parsed.
+			 * If NULL, we are in main configuration file */
 
 static void yyerror(char *s) {
-	fprintf(stderr, "Error in configuration file %s\n", conf.config_file);
-	fprintf(stderr, "line %d: %s at '%s'\n", lineno, s, yytext);
+	fprintf(stderr, "Error in configuration file %s ",
+		incl_file ? incl_file : conf.config_file);
+	fprintf(stderr, "at line %d: %s at '%s'\n", lineno, s, yytext);
 }
 
 static void uerror(const char *fmt, ...) {
 	char s[1024];
 	va_list args;
 
-	fprintf(stderr, "Error in configuration file %s\n", conf.config_file);
+	fprintf(stderr, "Error in configuration file %s ",
+		incl_file ? incl_file : conf.config_file);
 	va_start(args, fmt);
 	vsprintf(s, fmt, args);
-	fprintf(stderr, "line %d: %s\n", lineno, s);
+	fprintf(stderr, "at line %d: %s\n", lineno, s);
 	va_end(args);
 }
 
@@ -181,11 +201,17 @@ static void uerror(const char *fmt, ...) {
 %token		IFNAME
 %token		IFTYPE
 %token		MNIFPREFERENCE
+%token		ISTUNNEL
 %token		MNUSEALLINTERFACES
 %token		MNROUTERPROBES
 %token		MNROUTERPROBETIMEOUT
 %token		MNDISCARDHAPARAMPROB
 %token		OPTIMISTICHANDOFF
+%token		HOMEPREFIX
+%token		HAACCEPTMOBRTR
+%token		ISMOBRTR
+%token		HASERVEDPREFIX
+%token		MOBRTRUSEEXPLICITMODE
 /* PMIP CONF ELEMENTS */
 %token      RFC5213TIMESTAMPBASEDAPPROACHINUSE;
 %token      RFC5213MOBILENODEGENERATEDTIMESTAMPINUSE;
@@ -343,6 +369,19 @@ topdef		: MIP6ENTITY mip6entity ';'
 		{
 			conf.DefaultBindingAclPolicy = $2;
 		}
+		| HAACCEPTMOBRTR BOOL ';'
+		{
+			conf.HaAcceptMobRtr = $2;
+		}
+		| HASERVEDPREFIX prefixlistentry ';'
+		{
+			list_splice(&prefixes,
+				    conf.nemo_ha_served_prefixes.prev);
+		}
+		| MOBRTRUSEEXPLICITMODE BOOL ';'
+		{
+			conf.MobRtrUseExplicitMode = $2;
+		}
 		| BINDINGACLPOLICY bindaclpolicy ';'
 		{
 			bae = NULL;
@@ -389,11 +428,28 @@ ifacedef	: QSTRING ifacesub
 			struct net_iface *nni;
 			strncpy(ni.name, $1, IF_NAMESIZE - 1);
 			ni.ifindex = if_nametoindex($1);
+
+			if (is_if_ha(&ni) && ni.is_tunnel) {
+				/* We do not allow tunnel interfaces
+				   for HA, only for MN and CN */
+				uerror("Use of tunnel interface is not"
+				       " possible for HA yet");
 			free($1);
-			if (ni.ifindex <= 0) {
-				uerror("invalid interface");
 				return -1;
 			}
+			if (ni.ifindex <= 0) {
+				if (is_if_ha(&ni)) {
+					/* We do not allow unavailable
+					   ifaces for HA ... */
+					uerror("HA interface %s "
+					       "unavailable", $1);
+					free($1);
+				return -1;
+			}
+				/* ... but allow them for CN and MN */
+			}
+			free($1);
+
 			nni = malloc(sizeof(struct net_iface));
 			if (nni == NULL) {
 				uerror("out of memory");
@@ -424,7 +480,18 @@ ifaceopt	: IFTYPE mip6entity ';'
 		}
 		| MNIFPREFERENCE NUMBER ';'
 		{
-			ni.mn_if_preference = $2;
+			int pref = $2;
+			if ((pref > POL_MN_IF_MIN_PREFERENCE) || (pref < 0)) {
+				uerror("Found bad interface preference value "
+				       "(%d). Valid range is [0,%d].\n", pref,
+				       POL_MN_IF_MIN_PREFERENCE);
+				return -1;
+			}
+ 			ni.mn_if_preference = pref;
+		}
+		| ISTUNNEL BOOL ';'
+		{
+			ni.is_tunnel = $2;
 		}
 		;
 
@@ -463,12 +530,16 @@ linksub		: QSTRING '{' linkdefs '}'
 			memcpy(nhai, &hai, sizeof(struct home_addr_info));
 			INIT_LIST_HEAD(&nhai->ro_policies);
 			INIT_LIST_HEAD(&nhai->ha_list.home_agents);
+			INIT_LIST_HEAD(&nhai->mob_net_prefixes);
 			nhai->ha_list.dhaad_id = -1;
 			list_splice(&hai.ro_policies, &nhai->ro_policies);
+			list_splice(&hai.mob_net_prefixes,
+				    &nhai->mob_net_prefixes);
 			list_add_tail(&nhai->list, &conf.home_addrs);
 
 			memset(&hai, 0, sizeof(struct home_addr_info));
 			INIT_LIST_HEAD(&hai.ro_policies);
+			INIT_LIST_HEAD(&hai.mob_net_prefixes);
 		}
 		;
 
@@ -480,16 +551,35 @@ linkdef		: HOMEAGENTADDRESS ADDR ';'
 		{
 			memcpy(&hai.ha_addr, &$2, sizeof(struct in6_addr));
 		}
-		| HOMEADDRESS ADDR '/' prefixlen ';'
-		{
-			hai.hoa.addr = $2;
-			hai.plen = $4;
-		}
+		| HOMEADDRESS homeaddress ';'
 		| USEALTCOA BOOL ';'
                 {
 		        hai.altcoa = $2;
 		}
 		| MNROPOLICY mnropolicy ';'
+		| ISMOBRTR BOOL ';'
+                {
+			if ($2)
+				hai.mob_rtr = IP6_MH_BU_MR;
+		}
+		|  HOMEPREFIX ADDR '/' prefixlen ';'
+                {
+			ipv6_addr_prefix(&hai.home_prefix, &$2, $4);
+			hai.home_plen = $4;
+		}
+		;
+
+homeaddress	: homeaddrdef prefixlistsub
+		{
+			hai.mnp_count = mv_prefixes(&hai.mob_net_prefixes);
+		}
+		;
+
+homeaddrdef	: ADDR '/' prefixlen
+		{
+			hai.hoa.addr = $1;
+			hai.plen = $3;
+		}
 		;
 
 ipsecpolicyset	: ipsechaaddrdef ipsecmnaddrdefs ipsecpolicydefs
@@ -704,7 +794,7 @@ bindaclpolval	: BOOL
 		| NUMBER { $$ = $1; }
 		;
 
-bindaclpolicy	: ADDR bindaclpolval
+bindaclpolicy	: ADDR prefixlistsub bindaclpolval
 		{
 			bae = malloc(sizeof(struct policy_bind_acl_entry));
 			if (bae == NULL) {
@@ -714,7 +804,9 @@ bindaclpolicy	: ADDR bindaclpolval
 			memset(bae, 0, sizeof(struct policy_bind_acl_entry));
 			bae->hoa = $1;
 			bae->plen = 128;
-			bae->bind_policy = $2;
+			INIT_LIST_HEAD(&bae->mob_net_prefixes);
+			bae->mnp_count = mv_prefixes(&bae->mob_net_prefixes);
+			bae->bind_policy = $3;
 			list_add_tail(&bae->list, &conf.bind_acl);
 		}
 		;
@@ -729,6 +821,29 @@ prefixlen	: NUMBER
 		}
 		;
 
+prefixlistsub	:
+		| '(' prefixlist ')'
+		;
+
+prefixlist	: prefixlistentry
+		| prefixlist ',' prefixlistentry
+		;
+
+prefixlistentry	: ADDR '/' prefixlen
+		{
+			struct prefix_list_entry *p;
+			p = malloc(sizeof(struct prefix_list_entry));
+			if (p == NULL) {
+				fprintf(stderr,
+					"%s: out of memory\n", __FUNCTION__);
+				return -1;
+			}
+			memset(p, 0, sizeof(struct prefix_list_entry));
+			p->ple_prefix = $1;
+			p->ple_plen = $3;
+			list_add_tail(&p->list, &prefixes);
+		}
+		;
 
 proxymiplmadef	: QSTRING proxymiplmasub
 		{
@@ -978,5 +1093,4 @@ proxymipmagopt	: LMAADDRESS ADDR ';'
 			conf.PcapSyslogDeAssociationGrepString = $2;
 		}
 		;
-
 %%

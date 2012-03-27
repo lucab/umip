@@ -1,11 +1,11 @@
 ## $Id: Makefile.am 1.55 06/05/07 17:37:11+03:00 anttit@tcs.hut.fi $
 ## Process this file with automake to produce Makefile.in
 
-AM_CFLAGS = -Wall -g -Wpointer-arith -Wreturn-type -pedantic -std=gnu99 -DUSE_RADIUS -DCACHE_RADIUS
-AM_CPPFLAGS = -isystem ../include -I../src -I./pmip -I/usr/local/include
+AM_CFLAGS = -Wall -g -Wextra -Wpointer-arith -Wreturn-type -pedantic -std=gnu99 -DUSE_RADIUS -DCACHE_RADIUS
+AM_CPPFLAGS = -isystem $(top_srcdir)/include -I../src -I./pmip -I/usr/local/include
 AM_YFLAGS = -d
 
-defpath.h: Makefile.am
+defpath.h: $(top_builddir)/config.h
 	echo "#define DEFAULT_CONFIG_FILE \"$(sysconfdir)/pmip6d.conf\"" > $@
 
 pmgr.c: mk-pmgr_c.sh pmgr.c.in policy.h
@@ -25,7 +25,7 @@ pmip6d_SOURCES = pmgr.c pmgr.h defpath.h \
 		gram.y scan.l \
 		tqueue.c tqueue.h \
 		icmp6.c icmp6.h \
-		list.h util.h \
+		list.h util.c util.h \
 		hash.c hash.h \
 		debug.c debug.h \
 		dhaad_ha.c dhaad_ha.h \
@@ -49,6 +49,7 @@ pmip6d_SOURCES = pmgr.c pmgr.h defpath.h \
 		proc_sys.c proc_sys.h \
 		prefix.c prefix.h \
 		ipsec.c ipsec.h \
+		statistics.h \
 		./pmip/pmip.h \
         ./pmip/pmip_cache.c \
         ./pmip/pmip_cache.h \
@@ -85,14 +86,22 @@ endif
 pmip6d_LDADD =  -lpcap  -lfreeradius-client
 
 if MISSING
-pmip6d_LDADD += -L../libmissing -lmissing
+pmip6d_LDADD += -L$(top_builddir)/libmissing -lmissing
 endif
 
 if LOCAL_NETLINK
-pmip6d_LDADD += -L../libnetlink -lnetlink
+pmip6d_LDADD += -L$(top_builddir)/libnetlink -lnetlink
 endif
 
-noinst_HEADERS = ../include/netinet/icmp6.h \
-		 ../include/netinet/in.h \
-		 ../include/netinet/ip6.h \
-		 ../include/netinet/ip6mh.h
+noinst_HEADERS = $(top_srcdir)/include/netinet/icmp6.h \
+		 $(top_srcdir)/include/netinet/in.h \
+		 $(top_srcdir)/include/netinet/ip6.h \
+		 $(top_srcdir)/include/netinet/ip6mh.h \
+		 $(top_srcdir)/include/linux/xfrm.h
+
+CLEANFILES = gram.c gram.h \
+	     pmgr.c pmgr.h \
+	     scan.c
+
+DISTCLEANFILES = $(BUILT_SOURCES)
+MAINTAINERCLEANFILES = Makefile.in

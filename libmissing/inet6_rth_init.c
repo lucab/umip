@@ -2,7 +2,7 @@
 
 /* This is a substitute for a missing inet6_rth_init(). */
 
-#include <stdlib.h>
+#include <stdio.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/ip6.h>
