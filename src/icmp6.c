@@ -2,7 +2,7 @@
  * $Id: icmp6.c 1.42 06/05/06 15:15:47+03:00 anttit@tcs.hut.fi $
  *
  * This file is part of the MIPL Mobile IPv6 for Linux.
- * 
+ *
  * Authors: Antti Tuominen <anttit@tcs.hut.fi>
  *          Ville Nuorvala <vnuorval@tcs.hut.fi>
  *
@@ -24,6 +24,25 @@
  * Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
  * 02111-1307 USA.
  */
+/*
+ * This file is part of the PMIP, Proxy Mobile IPv6 for Linux.
+ *
+ * Authors: OPENAIR3 <openair_tech@eurecom.fr>
+ *
+ * Copyright 2010-2011 EURECOM (Sophia-Antipolis, FRANCE)
+ * 
+ * Proxy Mobile IPv6 (or PMIPv6, or PMIP) is a network-based mobility 
+ * management protocol standardized by IETF. It is a protocol for building 
+ * a common and access technology independent of mobile core networks, 
+ * accommodating various access technologies such as WiMAX, 3GPP, 3GPP2 
+ * and WLAN based access architectures. Proxy Mobile IPv6 is the only 
+ * network-based mobility management protocol standardized by IETF.
+ * 
+ * PMIP Proxy Mobile IPv6 for Linux has been built above MIPL free software;
+ * which it involves that it is under the same terms of GNU General Public
+ * License version 2. See MIPL terms condition if you need more details. 
+ */
+
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -44,15 +63,17 @@
 #include "conf.h"
 
 enum {
-	ICMP6_DU = 0,
-	ICMP6_PP = 1,
-	ICMP6_RA = 3,
-	ICMP6_NA = 4,
-	ICMP6_DRQ = 5,
-	ICMP6_DRP = 6,
-	ICMP6_MPS = 7,
-	ICMP6_MPA = 8,
-	__ICMP6_SENTINEL = 9
+    ICMP6_DU = 0,
+    ICMP6_PP = 1,
+    ICMP6_RA = 3,
+    ICMP6_NA = 4,
+    ICMP6_DRQ = 5,
+    ICMP6_DRP = 6,
+    ICMP6_MPS = 7,
+    ICMP6_MPA = 8,
+    ICMP6_NS  = 9,  // ADDED EURECOM
+    ICMP6_RS  = 10, // ADDED EURECOM
+    __ICMP6_SENTINEL = 11
 };
 
 
@@ -64,7 +85,7 @@ struct sock {
 static pthread_rwlock_t handler_lock;
 static struct icmp6_handler *handlers[__ICMP6_SENTINEL + 1];
 
-static struct sock icmp6_sock;
+struct sock icmp6_sock;
 static pthread_t icmp6_listener;
 
 static inline int icmp6_type_map(uint8_t type)
@@ -73,7 +94,7 @@ static inline int icmp6_type_map(uint8_t type)
 	case ICMP6_DST_UNREACH:
 		return ICMP6_DU;
 	case ICMP6_PARAM_PROB:
-		return ICMP6_PP;	
+		return ICMP6_PP;
 	case ND_ROUTER_ADVERT:
 		return ICMP6_RA;
 	case ND_NEIGHBOR_ADVERT:
@@ -86,6 +107,12 @@ static inline int icmp6_type_map(uint8_t type)
 		return ICMP6_MPS;
 	case MIP_PREFIX_ADVERT:
 		return ICMP6_MPA;
+    // Modified by EURECOM
+    case ND_NEIGHBOR_SOLICIT:
+        return ICMP6_NS;
+    // added by EURECOM
+    case ND_ROUTER_SOLICIT:
+        return ICMP6_RS;
 	default:
 		return __ICMP6_SENTINEL;
 	}
@@ -93,7 +120,7 @@ static inline int icmp6_type_map(uint8_t type)
 
 static inline struct icmp6_handler *icmp6_handler_get(uint8_t type)
 {
-	return handlers[icmp6_type_map(type)]; 
+	return handlers[icmp6_type_map(type)];
 }
 
 void icmp6_handler_reg(uint8_t type, struct icmp6_handler *handler)
@@ -110,7 +137,7 @@ void icmp6_handler_reg(uint8_t type, struct icmp6_handler *handler)
 
 void icmp6_handler_dereg(uint8_t type, struct icmp6_handler *handler)
 {
-	struct icmp6_handler **h; 
+	struct icmp6_handler **h;
 	int i = icmp6_type_map(type);
 	pthread_rwlock_wrlock(&handler_lock);
 	h = &handlers[i];
@@ -134,7 +161,7 @@ void icmp6_handler_dereg(uint8_t type, struct icmp6_handler *handler)
  *
  * Join/leave multicast group on interface.  cmd must be either
  * IPV6_JOIN_GROUP or IPV6_LEAVE_GROUP.  Also turns off local
- * multicast loopback. 
+ * multicast loopback.
  **/
 int if_mc_group(int sock, int ifindex, const struct in6_addr *mc_addr, int cmd)
 {
@@ -149,7 +176,7 @@ int if_mc_group(int sock, int ifindex, const struct in6_addr *mc_addr, int cmd)
 	mreq.ipv6mr_interface = ifindex;
 	mreq.ipv6mr_multiaddr = *mc_addr;
 
-	ret = setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, 
+	ret = setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_LOOP,
 			 &val, sizeof(int));
 
 	if (ret < 0) return ret;
@@ -209,14 +236,14 @@ int icmp6_init(void)
 		return icmp6_sock.fd;
 	}
 	val = 1;
-	if (setsockopt(icmp6_sock.fd, IPPROTO_IPV6, IPV6_RECVPKTINFO, 
+	if (setsockopt(icmp6_sock.fd, IPPROTO_IPV6, IPV6_RECVPKTINFO,
 		       &val, sizeof(val)) < 0)
 		return -1;
 	if (setsockopt(icmp6_sock.fd, IPPROTO_IPV6, IPV6_RECVHOPLIMIT,
 		       &val, sizeof(val)) < 0)
 		return -1;
-	ICMP6_FILTER_SETBLOCKALL(&filter);
-	ICMP6_FILTER_SETPASS(ICMP6_DST_UNREACH, &filter);
+	//ICMP6_FILTER_SETBLOCKALL(&filter);
+	//ICMP6_FILTER_SETPASS(ICMP6_DST_UNREACH, &filter);
 
 	if (is_ha()) {
 		ICMP6_FILTER_SETPASS(MIP_PREFIX_SOLICIT, &filter);
@@ -231,12 +258,18 @@ int icmp6_init(void)
 		ICMP6_FILTER_SETPASS(MIP_HA_DISCOVERY_REPLY, &filter);
 		ICMP6_FILTER_SETPASS(ICMP6_PARAM_PROB, &filter);
 	}
+    //Added by EURECOM/Nghia for PMIP
+    if (is_mag()) {
+        ICMP6_FILTER_SETPASS(ND_NEIGHBOR_SOLICIT, &filter);
+        ICMP6_FILTER_SETPASS(ND_NEIGHBOR_ADVERT, &filter);
+        ICMP6_FILTER_SETPASS(ND_ROUTER_SOLICIT, &filter);
+    }
 
-	if (setsockopt(icmp6_sock.fd, IPPROTO_ICMPV6, ICMP6_FILTER, 
+	if (setsockopt(icmp6_sock.fd, IPPROTO_ICMPV6, ICMP6_FILTER,
 		       &filter, sizeof(struct icmp6_filter)) < 0)
 		return -1;
 	val = 2;
-	if (setsockopt(icmp6_sock.fd, IPPROTO_RAW, IPV6_CHECKSUM, 
+	if (setsockopt(icmp6_sock.fd, IPPROTO_RAW, IPV6_CHECKSUM,
 		       &val, sizeof(val)) < 0)
 		return -1;
 	/* create ICMP listener thread */
@@ -335,9 +368,9 @@ int icmp6_send(int oif, uint8_t hoplimit,
 	pthread_mutex_lock(&icmp6_sock.send_mutex);
 	setsockopt(icmp6_sock.fd, IPPROTO_IPV6, IPV6_PKTINFO,
 		   &on, sizeof(int));
-	setsockopt(icmp6_sock.fd, IPPROTO_IPV6, IPV6_UNICAST_HOPS, 
+	setsockopt(icmp6_sock.fd, IPPROTO_IPV6, IPV6_UNICAST_HOPS,
 		   &hops, sizeof(hops));
-	setsockopt(icmp6_sock.fd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, 
+	setsockopt(icmp6_sock.fd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS,
 		   &hops, sizeof(hops));
 
 	ret = sendmsg(icmp6_sock.fd, &msg, 0);
@@ -376,7 +409,7 @@ ssize_t icmp6_recv(int sockfd, unsigned char *msg, size_t msglen,
 	if ((len = recvmsg(sockfd, &mhdr, 0)) < 0)
 		return -errno;
 
-        for (cmsg = CMSG_FIRSTHDR(&mhdr); cmsg; 
+        for (cmsg = CMSG_FIRSTHDR(&mhdr); cmsg;
 	     cmsg = CMSG_NXTHDR(&mhdr, cmsg)) {
 		if (cmsg->cmsg_level != IPPROTO_IPV6)
 			continue;
@@ -397,7 +430,7 @@ struct ip6_subopt_hdr {
 	u_int8_t	optlen;
 };
 
-int icmp6_parse_data(struct ip6_hdr *ip6h, unsigned int len, 
+int icmp6_parse_data(struct ip6_hdr *ip6h, unsigned int len,
 		     struct in6_addr **lhoa, struct in6_addr **rhoa)
 {
 	uint8_t *data = (uint8_t *)ip6h;
@@ -415,7 +448,7 @@ int icmp6_parse_data(struct ip6_hdr *ip6h, unsigned int len,
 		struct ip6_ext *h = (struct ip6_ext *) (data + hoff);
 		unsigned int hlen = (h->ip6e_len + 1) << 3;
 
-		if (htype != IPPROTO_DSTOPTS && 
+		if (htype != IPPROTO_DSTOPTS &&
 		    htype != IPPROTO_ROUTING &&
 		    htype != IPPROTO_HOPOPTS)
 			return 0;
@@ -448,7 +481,7 @@ int icmp6_parse_data(struct ip6_hdr *ip6h, unsigned int len,
 			}
 		} else if (htype == IPPROTO_ROUTING) {
 			struct ip6_rthdr2 *rth = (struct ip6_rthdr2 *) h;
-			if (rth->ip6r2_type == 2 && 
+			if (rth->ip6r2_type == 2 &&
 			rth->ip6r2_len == 2 && rth->ip6r2_segleft == 1)
 				*rhoa = &rth->ip6r2_homeaddr;
 			dbg("RTH2 %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(*rhoa));

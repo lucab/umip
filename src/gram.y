@@ -2,7 +2,7 @@
  * $Id: gram.y 1.88 06/05/12 11:48:36+03:00 vnuorval@tcs.hut.fi $
  *
  * This file is part of the MIPL Mobile IPv6 for Linux.
- * 
+ *
  * Authors: Antti Tuominen <anttit@tcs.hut.fi>
  *          Ville Nuorvala <vnuorval@tcs.hut.fi>
  *
@@ -23,6 +23,24 @@
  * along with MIPL Mobile IPv6 for Linux; if not, write to the Free
  * Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
  * 02111-1307 USA
+ */
+/*
+ * This file is part of the PMIP, Proxy Mobile IPv6 for Linux.
+ *
+ * Authors: OPENAIR3 <openair_tech@eurecom.fr>
+ *
+ * Copyright 2010-2011 EURECOM (Sophia-Antipolis, FRANCE)
+ * 
+ * Proxy Mobile IPv6 (or PMIPv6, or PMIP) is a network-based mobility 
+ * management protocol standardized by IETF. It is a protocol for building 
+ * a common and access technology independent of mobile core networks, 
+ * accommodating various access technologies such as WiMAX, 3GPP, 3GPP2 
+ * and WLAN based access architectures. Proxy Mobile IPv6 is the only 
+ * network-based mobility management protocol standardized by IETF.
+ * 
+ * PMIP Proxy Mobile IPv6 for Linux has been built above MIPL free software;
+ * which it involves that it is under the same terms of GNU General Public
+ * License version 2. See MIPL terms condition if you need more details. 
  */
 
 %{
@@ -52,7 +70,7 @@ struct net_iface ni = {
 	.mip6_if_entity = MIP6_ENTITY_NO,
 	.mn_if_preference = POL_MN_IF_DEF_PREFERENCE,
 };
-	
+
 struct home_addr_info hai = {
 	.ro_policies = LIST_HEAD_INIT(hai.ro_policies)
 };
@@ -67,6 +85,7 @@ struct ipsec_policy_set {
 struct ipsec_policy_set ipsec_ps = {
 	.hoa_list = LIST_HEAD_INIT(ipsec_ps.hoa_list)
 };
+
 
 extern int lineno;
 extern char *yytext;
@@ -92,6 +111,7 @@ static void uerror(const char *fmt, ...) {
 %union {
 	char *string;
 	struct in6_addr addr;
+	struct in6_addr macaddr;
 	char bool;
 	unsigned int num;
 	unsigned int numpair[2];
@@ -100,6 +120,7 @@ static void uerror(const char *fmt, ...) {
 
 %token <string> QSTRING
 %token <addr>	ADDR
+%token <macaddr>	MACADDR
 %token <bool>	BOOL
 %token <num>	NUMBER
 %token <dec>	DECIMAL
@@ -165,6 +186,46 @@ static void uerror(const char *fmt, ...) {
 %token		MNROUTERPROBETIMEOUT
 %token		MNDISCARDHAPARAMPROB
 %token		OPTIMISTICHANDOFF
+/* PMIP CONF ELEMENTS */
+%token      RFC5213TIMESTAMPBASEDAPPROACHINUSE;
+%token      RFC5213MOBILENODEGENERATEDTIMESTAMPINUSE;
+%token      RFC5213FIXEDMAGLINKLOCALADDRESSONALLACCESSLINKS;
+%token      RFC5213FIXEDMAGLINKLAYERADDRESSONALLACCESSLINKS;
+%token      RFC5213MINDELAYBEFOREBCEDELETE;
+%token      RFC5213MAXDELAYBEFORENEWBCEASSIGN;
+%token      RFC5213TIMESTAMPVALIDITYWINDOW;
+%token      RFC5213ENABLEMAGLOCALROUTING
+%token		MIP6LMA
+%token		MIP6MAG
+%token		PROXYMIPLMA
+%token		PROXYMIPMAG
+%token		ALLLMAMULTICASTADDRESS
+%token		LMAADDRESS
+%token		LMAPMIPNETWORKDEVICE
+%token		LMACORENETWORKADDRESS
+%token		LMACORENETWORKDEVICE
+%token		MAGADDRESSINGRESS
+%token		MAGADDRESSEGRESS
+%token		MAG1ADDRESSINGRESS
+%token		MAG1ADDRESSEGRESS
+%token		MAG2ADDRESSINGRESS
+%token		MAG2ADDRESSEGRESS
+%token		MAG3ADDRESSINGRESS
+%token		MAG3ADDRESSEGRESS
+%token		MAGDEVICEINGRESS
+%token		MAGDEVICEEGRESS
+%token		OURADDRESS
+%token		HOMENETWORKPREFIX
+%token		PBULIFETIME
+%token		PBALIFETIME
+%token		RETRANSMISSIONTIMEOUT
+%token		MAXMESSAGERETRANSMISSIONS
+%token		TUNNELINGENABLED
+%token		DYNAMICTUNNELINGENABLED
+%token		RADIUSPASSWORD
+%token      RADIUSCLIENTCONFIGFILE
+%token      PCAPSYSLOGASSOCIATIONGREPSTRING
+%token      PCAPSYSLOGDEASSOCIATIONGREPSTRING
 
 %token		INV_TOKEN
 
@@ -235,7 +296,7 @@ topdef		: MIP6ENTITY mip6entity ';'
 		| HAMAXBINDINGLIFE NUMBER ';'
 		{
 			if ($2 > MAX_BINDING_LIFETIME) {
-				uerror("max allowed binding lifetime is %d", 
+				uerror("max allowed binding lifetime is %d",
 				       MAX_BINDING_LIFETIME);
 				return -1;
 			}
@@ -244,7 +305,7 @@ topdef		: MIP6ENTITY mip6entity ';'
 		| MNMAXHABINDINGLIFE NUMBER ';'
 		{
 			if ($2 > MAX_BINDING_LIFETIME) {
-				uerror("max allowed binding lifetime is %d", 
+				uerror("max allowed binding lifetime is %d",
 				       MAX_BINDING_LIFETIME);
 				return -1;
 			}
@@ -253,7 +314,7 @@ topdef		: MIP6ENTITY mip6entity ';'
 		| MNMAXCNBINDINGLIFE NUMBER ';'
 		{
 			if ($2 > MAX_RR_BINDING_LIFETIME) {
-				uerror("max allowed binding lifetime is %d", 
+				uerror("max allowed binding lifetime is %d",
 				       MAX_RR_BINDING_LIFETIME);
 				return -1;
 			}
@@ -282,41 +343,45 @@ topdef		: MIP6ENTITY mip6entity ';'
 		{
 			conf.DefaultBindingAclPolicy = $2;
 		}
-		| BINDINGACLPOLICY bindaclpolicy ';' 
+		| BINDINGACLPOLICY bindaclpolicy ';'
 		{
 			bae = NULL;
 		}
-		| USECNBUACK BOOL ';' 
+		| USECNBUACK BOOL ';'
 		{
 			conf.CnBuAck = $2 ? IP6_MH_BU_ACK : 0;
 		}
 		| IPSECPOLICYSET '{' ipsecpolicyset '}'
-		| MNUSEALLINTERFACES BOOL ';' 
+		| MNUSEALLINTERFACES BOOL ';'
 		{
 			conf.MnUseAllInterfaces = $2 ? POL_MN_IF_DEF_PREFERENCE : 0;
 		}
-		| MNROUTERPROBES NUMBER ';' 
+		| MNROUTERPROBES NUMBER ';'
 		{
 			conf.MnRouterProbes = $2;
 		}
-		| MNROUTERPROBETIMEOUT DECIMAL ';' 
+		| MNROUTERPROBETIMEOUT DECIMAL ';'
 		{
 			if ($2 > 0)
 				tssetdsec(conf.MnRouterProbeTimeout_ts, $2);
 		}
-		| MNDISCARDHAPARAMPROB BOOL ';' 
+		| MNDISCARDHAPARAMPROB BOOL ';'
 		{
 			conf.MnDiscardHaParamProb = $2;
 		}
-		| OPTIMISTICHANDOFF BOOL ';' 
+		| OPTIMISTICHANDOFF BOOL ';'
 		{
 			conf.OptimisticHandoff = $2;
 		}
+		| PROXYMIPLMA proxymiplmadef
+		| PROXYMIPMAG proxymipmagdef
 		;
 
 mip6entity	: MIP6CN { $$ = MIP6_ENTITY_CN;	}
 		| MIP6MN { $$ = MIP6_ENTITY_MN; }
 		| MIP6HA { $$ = MIP6_ENTITY_HA; }
+		| MIP6LMA { $$ = MIP6_ENTITY_LMA; }
+		| MIP6MAG { $$ = MIP6_ENTITY_MAG; }
 		;
 
 ifacedef	: QSTRING ifacesub
@@ -356,7 +421,7 @@ ifaceopts	: ifaceopt
 ifaceopt	: IFTYPE mip6entity ';'
 		{
 			ni.mip6_if_entity = $2;
-		} 
+		}
 		| MNIFPREFERENCE NUMBER ';'
 		{
 			ni.mn_if_preference = $2;
@@ -386,12 +451,12 @@ linksub		: QSTRING '{' linkdefs '}'
 			if (hai.plen == 64) {
 				struct in6_addr lladdr;
 				ipv6_addr_llocal(&hai.hoa.addr, &lladdr);
-				if (!addr_do(&lladdr, 64, 
+				if (!addr_do(&lladdr, 64,
 					     hai.if_home, NULL, NULL))
 					hai.lladdr_comp = IP6_MH_BU_LLOCAL;
 			}
 			if (IN6_IS_ADDR_UNSPECIFIED(&hai.home_prefix)) {
-				ipv6_addr_prefix(&hai.home_prefix, 
+				ipv6_addr_prefix(&hai.home_prefix,
 						 &hai.hoa.addr, hai.plen);
 				hai.home_plen = hai.plen;
 			}
@@ -423,7 +488,7 @@ linkdef		: HOMEAGENTADDRESS ADDR ';'
 		| USEALTCOA BOOL ';'
                 {
 		        hai.altcoa = $2;
-		}	  
+		}
 		| MNROPOLICY mnropolicy ';'
 		;
 
@@ -472,7 +537,7 @@ ipsecmnaddr	: ADDR '/' prefixlen
 				uerror("out of memory");
 				return -1;
 			}
-			memset(hai, 0, sizeof(struct home_addr_info)); 
+			memset(hai, 0, sizeof(struct home_addr_info));
 			hai->hoa.addr = $1;
 			hai->plen = $3;
 			list_add_tail(&hai->list, &ipsec_ps.hoa_list);
@@ -564,7 +629,7 @@ ipsectypeval	: HOMEREGBINDING { $$ = IPSEC_POLICY_TYPE_HOMEREGBINDING; }
 		| ANY { $$ = IPSEC_POLICY_TYPE_ANY; }
 		;
 
-ipsecprotos	: 
+ipsecprotos	:
 		{
 			uerror("IPsecPolicy must set at least one protocol");
 			return -1;
@@ -575,13 +640,13 @@ ipsecprotos	:
 		;
 
 ipsecproto	: USEESP { $$ = IPSEC_PROTO_ESP; }
-		| USEAH { $$ = IPSEC_PROTO_AH; } 
-		| USEIPCOMP { $$ = IPSEC_PROTO_IPCOMP; } 
+		| USEAH { $$ = IPSEC_PROTO_AH; }
+		| USEIPCOMP { $$ = IPSEC_PROTO_IPCOMP; }
 		;
 
 ipsecreqid	: { $$[0] = $$[1] = 0; }
-		| NUMBER { $$[0] = $$[1] = $1; } 
-		| NUMBER NUMBER { $$[0] = $1; $$[1] = $2; } 
+		| NUMBER { $$[0] = $$[1] = $1; }
+		| NUMBER NUMBER { $$[0] = $1; $$[1] = $2; }
 		;
 
 xfrmaction	: { $$ = XFRM_POLICY_ALLOW; }
@@ -589,14 +654,14 @@ xfrmaction	: { $$ = XFRM_POLICY_ALLOW; }
 		;
 
 mnropolicy	: mnropolicyaddr dorouteopt
-		{ 
+		{
 			struct xfrm_ro_pol *rp;
 			rp = malloc(sizeof(struct xfrm_ro_pol));
 			if (rp == NULL) {
 				uerror("out of memory");
 				return -1;
 			}
-			memset(rp, 0, sizeof(struct xfrm_ro_pol)); 
+			memset(rp, 0, sizeof(struct xfrm_ro_pol));
 			rp->cn_addr = $1;
 			rp->do_ro = $2;
 			list_add_tail(&rp->list, &hai.ro_policies);
@@ -630,7 +695,7 @@ policymodule	: QSTRING
 		;
 
 bindaclpolval	: BOOL
-		{ 
+		{
 			if ($1)
 				$$ = IP6_MH_BAS_ACCEPTED;
 			else
@@ -646,7 +711,7 @@ bindaclpolicy	: ADDR bindaclpolval
 				uerror("out of memory");
 				return -1;
 			}
-			memset(bae, 0, sizeof(struct policy_bind_acl_entry)); 
+			memset(bae, 0, sizeof(struct policy_bind_acl_entry));
 			bae->hoa = $1;
 			bae->plen = 128;
 			bae->bind_policy = $2;
@@ -654,13 +719,263 @@ bindaclpolicy	: ADDR bindaclpolval
 		}
 		;
 
-prefixlen	: NUMBER 
+prefixlen	: NUMBER
 		{
 			if ($1 > 128) {
 				uerror("invalid prefix length %d", $1);
 				return -1;
 			}
 			$$ = $1;
+		}
+		;
+
+
+proxymiplmadef	: QSTRING proxymiplmasub
+		{
+			conf.HomeNetworkPrefix = in6addr_any;
+			conf.OurAddress        = in6addr_loopback;
+		}
+		;
+
+proxymiplmasub	: '{' proxymiplmaopts '}'
+		| ';'
+		;
+
+proxymiplmaopts	: proxymiplmaopt
+		| proxymiplmaopts proxymiplmaopt
+		;
+
+proxymiplmaopt	: LMAADDRESS ADDR ';'
+		{
+			memcpy(&conf.LmaAddress, &$2, sizeof(struct in6_addr));
+		}
+		| LMAPMIPNETWORKDEVICE QSTRING ';'
+		{
+			conf.LmaPmipNetworkDevice = $2;
+		}
+                | LMACORENETWORKADDRESS ADDR ';'
+		{
+			memcpy(&conf.LmaCoreNetworkAddress, &$2, sizeof(struct in6_addr));
+		}
+		| LMACORENETWORKDEVICE QSTRING ';'
+		{
+			conf.LmaCoreNetworkDevice = $2;
+		}
+		| RFC5213TIMESTAMPBASEDAPPROACHINUSE BOOL ';'
+		{
+			conf.RFC5213TimestampBasedApproachInUse = $2;
+		}
+		| RFC5213MOBILENODEGENERATEDTIMESTAMPINUSE BOOL ';'
+		{
+			conf.RFC5213MobileNodeGeneratedTimestampInUse = $2;
+		}
+		| RFC5213FIXEDMAGLINKLOCALADDRESSONALLACCESSLINKS ADDR ';'
+		{
+			memcpy(&conf.RFC5213FixedMAGLinkLocalAddressOnAllAccessLinks, &$2, sizeof(struct in6_addr));
+		}
+		| RFC5213FIXEDMAGLINKLAYERADDRESSONALLACCESSLINKS  MACADDR ';'
+		{
+			memcpy(&conf.RFC5213FixedMAGLinkLayerAddressOnAllAccessLinks, &$2, sizeof(struct in6_addr));
+		}
+		| RFC5213MINDELAYBEFOREBCEDELETE NUMBER ';'
+		{
+			struct timespec lifetime;
+			lifetime.tv_sec = $2/1000;
+            lifetime.tv_nsec = ($2 % 1000)*1000000;
+			conf.RFC5213MinDelayBeforeBCEDelete = lifetime;
+		}
+		| RFC5213MAXDELAYBEFORENEWBCEASSIGN NUMBER ';'
+		{
+			struct timespec lifetime;
+            lifetime.tv_sec = $2/1000;
+            lifetime.tv_nsec = ($2 % 1000)*1000000;
+			conf.RFC5213MaxDelayBeforeNewBCEAssign = lifetime;		
+		}
+		| RFC5213TIMESTAMPVALIDITYWINDOW NUMBER ';'
+		{
+			struct timespec lifetime;
+            lifetime.tv_sec = $2/1000;
+            lifetime.tv_nsec = ($2 % 1000)*1000000;
+			conf.RFC5213TimestampValidityWindow = lifetime;
+		}
+		| OURADDRESS ADDR ';'
+		{
+			memcpy(&conf.OurAddress, &$2, sizeof(struct in6_addr));
+		}
+		| HOMENETWORKPREFIX ADDR ';'
+		{
+			memcpy(&conf.HomeNetworkPrefix, &$2, sizeof(struct in6_addr));
+		}
+		| TUNNELINGENABLED BOOL ';'
+		{
+			conf.TunnelingEnabled = $2;
+		}
+		| DYNAMICTUNNELINGENABLED BOOL ';'
+		{
+			conf.DynamicTunnelingEnabled = $2;
+		}
+		| PBULIFETIME NUMBER ';'
+		{
+			struct timespec lifetime;
+            lifetime.tv_sec = $2/1000;
+            lifetime.tv_nsec = ($2 % 1000)*1000000;
+			conf.PBULifeTime = lifetime;
+		}
+		| PBALIFETIME NUMBER ';'
+		{
+			struct timespec lifetime;
+            lifetime.tv_sec = $2/1000;
+            lifetime.tv_nsec = ($2 % 1000)*1000000;
+			conf.PBALifeTime = lifetime;
+		}
+		| RETRANSMISSIONTIMEOUT NUMBER ';'
+		{
+			struct timespec lifetime;
+            lifetime.tv_sec = $2/1000;
+            lifetime.tv_nsec = ($2 % 1000)*1000000;
+			conf.RetransmissionTimeOut = lifetime;
+		}
+		| MAXMESSAGERETRANSMISSIONS NUMBER ';'
+		{
+			conf.MaxMessageRetransmissions = $2;
+		}
+		| MAG1ADDRESSINGRESS ADDR ';'
+		{
+			memcpy(&conf.Mag1AddressIngress, &$2, sizeof(struct in6_addr));
+		}
+		| MAG1ADDRESSEGRESS ADDR ';'
+		{
+			memcpy(&conf.Mag1AddressEgress, &$2, sizeof(struct in6_addr));
+		}
+		| MAG2ADDRESSINGRESS ADDR ';'
+		{
+			memcpy(&conf.Mag2AddressIngress, &$2, sizeof(struct in6_addr));
+		}
+		| MAG2ADDRESSEGRESS ADDR ';'
+		{
+			memcpy(&conf.Mag2AddressEgress, &$2, sizeof(struct in6_addr));
+		}
+		| MAG3ADDRESSINGRESS ADDR ';'
+		{
+			memcpy(&conf.Mag3AddressIngress, &$2, sizeof(struct in6_addr));
+		}
+		| MAG3ADDRESSEGRESS ADDR ';'
+		{
+			memcpy(&conf.Mag3AddressEgress, &$2, sizeof(struct in6_addr));
+		}
+		;
+
+proxymipmagdef	: QSTRING proxymipmagsub
+		{
+			conf.HomeNetworkPrefix = in6addr_any;
+			conf.OurAddress        = in6addr_loopback;
+		}
+		;
+
+proxymipmagsub	: '{' proxymipmagopts '}'
+		| ';'
+		;
+
+proxymipmagopts	: proxymipmagopt
+		| proxymipmagopts proxymipmagopt
+		;
+
+proxymipmagopt	: LMAADDRESS ADDR ';'
+		{
+			memcpy(&conf.LmaAddress, &$2, sizeof(struct in6_addr));
+		}
+		| RFC5213TIMESTAMPBASEDAPPROACHINUSE BOOL ';'
+		{
+			conf.RFC5213TimestampBasedApproachInUse = $2;
+		}
+		| RFC5213MOBILENODEGENERATEDTIMESTAMPINUSE BOOL ';'
+		{
+			conf.RFC5213MobileNodeGeneratedTimestampInUse = $2;
+		}
+		| RFC5213FIXEDMAGLINKLOCALADDRESSONALLACCESSLINKS ADDR ';'
+		{
+			memcpy(&conf.RFC5213FixedMAGLinkLocalAddressOnAllAccessLinks, &$2, sizeof(struct in6_addr));
+		}
+		| RFC5213FIXEDMAGLINKLAYERADDRESSONALLACCESSLINKS MACADDR ';'
+		{
+			memcpy(&conf.RFC5213FixedMAGLinkLayerAddressOnAllAccessLinks, &$2, sizeof(struct in6_addr));
+		}
+		| RFC5213ENABLEMAGLOCALROUTING BOOL ';'
+		{
+			conf.RFC5213EnableMAGLocalRouting = $2;
+		}
+		| OURADDRESS ADDR ';'
+		{
+			memcpy(&conf.OurAddress, &$2, sizeof(struct in6_addr));
+		}
+		| MAGADDRESSINGRESS ADDR ';'
+		{
+			memcpy(&conf.MagAddressIngress, &$2, sizeof(struct in6_addr));
+		}
+		| MAGADDRESSEGRESS ADDR ';'
+		{
+			memcpy(&conf.MagAddressEgress, &$2, sizeof(struct in6_addr));
+		}
+		| MAGDEVICEINGRESS QSTRING ';'
+		{
+			conf.MagDeviceIngress = $2;		
+		}
+		| MAGDEVICEEGRESS QSTRING ';'
+		{
+			conf.MagDeviceEgress = $2;
+		}
+		| HOMENETWORKPREFIX ADDR ';'
+		{
+			memcpy(&conf.HomeNetworkPrefix, &$2, sizeof(struct in6_addr));
+		}
+		| TUNNELINGENABLED BOOL ';'
+		{
+			conf.TunnelingEnabled = $2;
+		}
+		| DYNAMICTUNNELINGENABLED BOOL ';'
+		{
+			conf.DynamicTunnelingEnabled = $2;
+		}
+		| PBULIFETIME NUMBER ';'
+		{
+			struct timespec lifetime;
+            lifetime.tv_sec = $2/1000;
+            lifetime.tv_nsec = ($2 % 1000)*1000000;
+			conf.PBULifeTime = lifetime;
+		}
+		| PBALIFETIME NUMBER ';'
+		{
+			struct timespec lifetime;
+            lifetime.tv_sec = $2/1000;
+            lifetime.tv_nsec = ($2 % 1000)*1000000;
+			conf.PBALifeTime = lifetime;
+		}
+		| RETRANSMISSIONTIMEOUT NUMBER ';'
+		{
+			struct timespec lifetime;
+            lifetime.tv_sec = $2/1000;
+            lifetime.tv_nsec = ($2 % 1000)*1000000;
+			conf.RetransmissionTimeOut = lifetime;
+		}
+		| MAXMESSAGERETRANSMISSIONS NUMBER ';'
+		{
+			conf.MaxMessageRetransmissions = $2;
+		}
+		| RADIUSPASSWORD QSTRING ';'
+		{
+			conf.RadiusPassword = $2;
+		}
+		| RADIUSCLIENTCONFIGFILE QSTRING ';'
+		{
+			conf.RadiusClientConfigFile = $2;
+		}
+		| PCAPSYSLOGASSOCIATIONGREPSTRING QSTRING ';'
+		{
+			conf.PcapSyslogAssociationGrepString = $2;
+		}
+		| PCAPSYSLOGDEASSOCIATIONGREPSTRING QSTRING ';'
+		{
+			conf.PcapSyslogDeAssociationGrepString = $2;
 		}
 		;
 

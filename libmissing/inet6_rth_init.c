@@ -2,6 +2,7 @@
 
 /* This is a substitute for a missing inet6_rth_init(). */
 
+#include <stdlib.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/ip6.h>
@@ -32,6 +33,6 @@ void *inet6_rth_init(void *bp, socklen_t bplen, int type,
 	rth->ip6r_len = segments << 1;
 	rth->ip6r_type = type;
 	rth->ip6r_segleft = 0;
-	
+
 	return bp;
 }

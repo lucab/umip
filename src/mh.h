@@ -5,12 +5,22 @@
 
 #include <netinet/in.h>
 #include <netinet/ip6mh.h>
+#include "pmip_consts.h"
+
 
 #define MIP6_SEQ_GT(x,y) ((short int)(((uint16_t)(x)) - ((uint16_t)(y))) > 0)
 
 /* If new types or options appear, these should be updated. */
-#define IP6_MH_TYPE_MAX IP6_MH_TYPE_BERROR
-#define IP6_MHOPT_MAX IP6_MHOPT_BAUTH
+#define IP6_MH_TYPE_MAX IP6_MH_TYPE_PBRES
+//#define IP6_MH_TYPE_MAX IP6_MH_TYPE_BERROR
+//#define IP6_MHOPT_MAX IP6_MHOPT_BAUTH
+//For PMIP
+#define IP6_MHOPT_MAX IP6_MHOPT_PMIP_MAX
+
+struct sock {
+    pthread_mutex_t send_mutex;
+    int fd;
+};
 
 struct in6_addr_bundle {
 	struct in6_addr *src;
@@ -34,14 +44,14 @@ struct mh_handler {
 int mh_init(void);
 void mh_cleanup(void);
 
-int mh_send(const struct in6_addr_bundle *addrs, 
-	    const struct iovec *mh_vec, int iovlen, 
+int mh_send(const struct in6_addr_bundle *addrs,
+	    const struct iovec *mh_vec, int iovlen,
 	    const uint8_t *bind_key, int oif);
 
 void mh_send_brr(struct in6_addr *mn_addr, struct in6_addr *local);
 
-void mh_send_ba(const struct in6_addr_bundle *addrs, uint8_t status, 
-		uint8_t flags, uint16_t sequence, 
+void mh_send_ba(const struct in6_addr_bundle *addrs, uint8_t status,
+		uint8_t flags, uint16_t sequence,
 		const struct timespec *lifetime,
 		const uint8_t *key, int iif);
 

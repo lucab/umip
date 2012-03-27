@@ -2,7 +2,7 @@
  * $Id: movement.c 1.172 06/05/19 01:51:45+03:00 vnuorval@tcs.hut.fi $
  *
  * This file is part of the MIPL Mobile IPv6 for Linux.
- * 
+ *
  * Author: Ville Nuorvala <vnuorval@tcs.hut.fi>
  *
  * Copyright 2003-2005 Go-Core Project
@@ -22,6 +22,24 @@
  * along with MIPL Mobile IPv6 for Linux; if not, write to the Free
  * Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
  * 02111-1307 USA.
+ */
+/*
+ * This file is part of the PMIP, Proxy Mobile IPv6 for Linux.
+ *
+ * Authors: OPENAIR3 <openair_tech@eurecom.fr>
+ *
+ * Copyright 2010-2011 EURECOM (Sophia-Antipolis, FRANCE)
+ * 
+ * Proxy Mobile IPv6 (or PMIPv6, or PMIP) is a network-based mobility 
+ * management protocol standardized by IETF. It is a protocol for building 
+ * a common and access technology independent of mobile core networks, 
+ * accommodating various access technologies such as WiMAX, 3GPP, 3GPP2 
+ * and WLAN based access architectures. Proxy Mobile IPv6 is the only 
+ * network-based mobility management protocol standardized by IETF.
+ * 
+ * PMIP Proxy Mobile IPv6 for Linux has been built above MIPL free software;
+ * which it involves that it is under the same terms of GNU General Public
+ * License version 2. See MIPL terms condition if you need more details. 
  */
 
 #ifdef HAVE_CONFIG_H
@@ -48,18 +66,18 @@
 #include "prefix.h"
 #include "conf.h"
 
-#define MD_DEBUG_LEVEL 1
+#define MD_DEBUG_LEVEL 3
 
 #if MD_DEBUG_LEVEL >= 1
 #define MDBG dbg
-#else 
-#define MDBG(...) 
+#else
+#define MDBG(...)
 #endif /* MDBG */
 
 #if MD_DEBUG_LEVEL >= 2
 #define MDBG2 dbg
 #else
-#define MDBG2(...) 
+#define MDBG2(...)
 #endif /* MDBG2 */
 
 #if MD_DEBUG_LEVEL >= 3
@@ -94,7 +112,7 @@ static void __md_trigger_movement_event(int event_type, int data,
 	struct movement_event e;
 
 	memset(&e, 0, sizeof(struct movement_event));
-	e.md_strategy = (conf.MnRouterProbes > 0 ? 
+	e.md_strategy = (conf.MnRouterProbes > 0 ?
 			 MD_STRATEGY_LAZY : MD_STRATEGY_EAGER);
 	e.event_type = event_type;
 	e.data = data;
@@ -102,10 +120,10 @@ static void __md_trigger_movement_event(int event_type, int data,
 	e.iface = iface;
 	e.coa = coa;
 
-	MDBG2("strategy %d type %d iface %s (%d) " 	
+	MDBG2("strategy %d type %d iface %s (%d) "
 	      "CoA %x:%x:%x:%x:%x:%x:%x:%x\n",
 	      e.md_strategy, e.event_type,
-	      e.iface->name, e.iface->ifindex, 
+	      e.iface->name, e.iface->ifindex,
 	      NIP6ADDR(e.coa ? &e.coa->addr : &in6addr_any));
 
 	mn_movement_event(&e);
@@ -124,7 +142,7 @@ void md_trigger_movement_event(int event_type, int data, int ifindex)
 
 static inline void md_free_coa(struct md_coa *coa)
 {
-	MDBG3("freeing CoA %x:%x:%x:%x:%x:%x:%x:%x on iface %d\n", 
+	MDBG3("freeing CoA %x:%x:%x:%x:%x:%x:%x:%x on iface %d\n",
 	      NIP6ADDR(&coa->addr), coa->ifindex);
 	list_del(&coa->list);
 	free(coa);
@@ -134,7 +152,7 @@ static void md_flush_coa(struct md_coa *coa)
 {
 	if (!(coa->flags&IFA_F_HOMEADDRESS_NODAD)) {
 		MDBG2("deleting CoA "
-		      "%x:%x:%x:%x:%x:%x:%x:%x on iface %d\n", 
+		      "%x:%x:%x:%x:%x:%x:%x:%x on iface %d\n",
 		      NIP6ADDR(&coa->addr), coa->ifindex);
 		addr_del(&coa->addr, coa->plen, coa->ifindex);
 	}
@@ -153,7 +171,7 @@ static void md_flush_coa_list(struct list_head *coas)
 
 static inline void md_free_router_prefix(struct prefix_list_entry *p)
 {
-	MDBG3("freeing prefix %x:%x:%x:%x:%x:%x:%x:%x/%d\n", 
+	MDBG3("freeing prefix %x:%x:%x:%x:%x:%x:%x:%x/%d\n",
 	      NIP6ADDR(&p->ple_prefix), p->ple_plen);
 	list_del(&p->list);
 	free(p);
@@ -172,7 +190,7 @@ static void __md_free_router(struct md_router *rtr)
 {
 	struct list_head *l, *n;
 	if (rtr->used) {
-		MDBG2("deleting default route via %x:%x:%x:%x:%x:%x:%x:%x\n", 
+		MDBG2("deleting default route via %x:%x:%x:%x:%x:%x:%x:%x\n",
 		      NIP6ADDR(&rtr->lladdr));
 
 		route_del(rtr->ifindex, RT_TABLE_MAIN, 0,
@@ -184,7 +202,7 @@ static void __md_free_router(struct md_router *rtr)
 		if (rtr->used) {
 			md_prefix_rule_del(p);
 			MDBG2("deleting prefix route "
-			      "%x:%x:%x:%x:%x:%x:%x:%x/%d\n", 
+			      "%x:%x:%x:%x:%x:%x:%x:%x/%d\n",
 			      NIP6ADDR(&p->ple_prefix), p->ple_plen);
 			route_del(rtr->ifindex, RT_TABLE_MAIN, 0, &in6addr_any,
 				  0, &p->ple_prefix, p->ple_plen, NULL);
@@ -192,7 +210,7 @@ static void __md_free_router(struct md_router *rtr)
 		md_free_router_prefix(p);
 	}
 	list_del(&rtr->list);
-	MDBG3("freeing router %x:%x:%x:%x:%x:%x:%x:%x\n", 
+	MDBG3("freeing router %x:%x:%x:%x:%x:%x:%x:%x\n",
 	      NIP6ADDR(&rtr->lladdr));
 	free(rtr);
 }
@@ -226,7 +244,7 @@ static void md_free_inet6_iface(struct md_inet6_iface *iface)
 static void md_expire_coa(struct md_inet6_iface *iface, struct md_coa *coa)
 {
 	list_del(&coa->list);
-	MDBG2("expiring CoA %x:%x:%x:%x:%x:%x:%x:%x on iface %s (%d)\n", 
+	MDBG2("expiring CoA %x:%x:%x:%x:%x:%x:%x:%x on iface %s (%d)\n",
 	      NIP6ADDR(&coa->addr), iface->name, iface->ifindex);
 	list_add_tail(&coa->list, &iface->expired_coas);
 }
@@ -249,7 +267,7 @@ static void md_expire_router(struct md_inet6_iface *iface,
 	tsclear(old->lifetime);
 	list_del(&old->list);
 
-	MDBG("expiring router %x:%x:%x:%x:%x:%x:%x:%x on iface %s (%d)\n", 
+	MDBG("expiring router %x:%x:%x:%x:%x:%x:%x:%x on iface %s (%d)\n",
 	     NIP6ADDR(&old->lladdr), iface->name, iface->ifindex);
 
 	if (old->used) {
@@ -257,10 +275,10 @@ static void md_expire_router(struct md_inet6_iface *iface,
 			struct prefix_list_entry *p;
 			struct list_head *clist, *cn;
 			p = list_entry(plist, struct prefix_list_entry, list);
-			
+
 			/* don't expire prefixes also advertised by the
 			   new router */
-			if (new && prefix_list_find(&new->prefixes, 
+			if (new && prefix_list_find(&new->prefixes,
 						    &p->ple_prefix,
 						    p->ple_plen)) {
 				md_free_router_prefix(p);
@@ -298,7 +316,7 @@ static void md_flush_inet6_iface(struct md_inet6_iface *iface)
 	list_for_each_safe(l, n, &iface->backup_rtrs) {
 		rtr = list_entry(l, struct md_router, list);
 		md_expire_router(iface, rtr, NULL);
-	}		
+	}
 	if ((rtr = md_get_first_router(&iface->default_rtr)) != NULL) {
 		md_expire_router(iface, rtr, NULL);
 	}
@@ -352,18 +370,18 @@ static struct md_coa *md_create_coa(struct md_inet6_iface *iface,
 		tssetsec(coa->valid_time, ci->ifa_valid);
 		tssetsec(coa->preferred_time, ci->ifa_prefered);
 		MDBG3("creating CoA %x:%x:%x:%x:%x:%x:%x:%x on "
-		      "iface %s (%d)\n", 
+		      "iface %s (%d)\n",
 		      NIP6ADDR(&coa->addr), iface->name, iface->ifindex);
 	}
 	return coa;
 }
 
-static int update_coa(struct md_inet6_iface *iface, 
+static int update_coa(struct md_inet6_iface *iface,
 		      struct ifaddrmsg *ifa, struct rtattr **rta_tb)
 {
 	struct md_coa *new, *old;
 	struct in6_addr *addr;
-	
+
 	addr = RTA_DATA(rta_tb[IFA_ADDRESS]);
 
 	if (!in6_is_addr_routable_unicast(addr))
@@ -373,8 +391,8 @@ static int update_coa(struct md_inet6_iface *iface,
 		return -ENOMEM;
 
 	if ((old = md_get_coa(&iface->coas, addr)) == NULL) {
-		list_add(&new->list, &iface->coas); 
-		MDBG2("adding CoA %x:%x:%x:%x:%x:%x:%x:%x on iface %s (%d)\n", 
+		list_add(&new->list, &iface->coas);
+		MDBG2("adding CoA %x:%x:%x:%x:%x:%x:%x:%x on iface %s (%d)\n",
 		      NIP6ADDR(&new->addr), iface->name, iface->ifindex);
 		if (!(iface->iface_flags & MD_LINK_LOCAL_DAD)) {
 			__md_trigger_movement_event(ME_COA_NEW, 0, iface, new);
@@ -388,7 +406,7 @@ static int update_coa(struct md_inet6_iface *iface,
 		tsadd(new->valid_time, new->timestamp, nexp);
 
 		MDBG3("updating CoA "
-		      "%x:%x:%x:%x:%x:%x:%x:%x on iface %s (%d)\n", 
+		      "%x:%x:%x:%x:%x:%x:%x:%x on iface %s (%d)\n",
 		      NIP6ADDR(&old->addr), iface->name, iface->ifindex);
 
 		old->flags = new->flags;
@@ -414,16 +432,16 @@ static int process_new_addr(struct ifaddrmsg *ifa, struct rtattr **rta_tb)
 {
 	struct md_inet6_iface *iface;
 	int res = 0;
-	
-	MDBG3("new address %x:%x:%x:%x:%x:%x:%x:%x on iface %d\n", 
-	      NIP6ADDR((struct in6_addr *)RTA_DATA(rta_tb[IFA_ADDRESS])), 
+
+	MDBG3("new address %x:%x:%x:%x:%x:%x:%x:%x on iface %d\n",
+	      NIP6ADDR((struct in6_addr *)RTA_DATA(rta_tb[IFA_ADDRESS])),
 	      ifa->ifa_index);
 
 	pthread_mutex_lock(&iface_lock);
 	if ((iface = md_get_inet6_iface(&ifaces, ifa->ifa_index)) != NULL) {
 		if (ifa->ifa_scope == RT_SCOPE_LINK) {
 			iface->iface_flags &= ~MD_LINK_LOCAL_DAD;
-			__md_trigger_movement_event(ME_LINK_UP, 0, 
+			__md_trigger_movement_event(ME_LINK_UP, 0,
 						    iface, NULL);
 			if (iface->iface_flags & MD_BLOCK_TRAFFIC)
 				md_block_rule_del(iface);
@@ -455,10 +473,10 @@ static int process_del_addr(struct ifaddrmsg *ifa, struct rtattr **rta_tb)
 	struct md_coa *coa;
 	struct md_inet6_iface iface_h;
 	struct md_coa coa_h;
-	
+
 	int res = 0;
 
-	MDBG3("deleted address %x:%x:%x:%x:%x:%x:%x:%x on iface %d\n", 
+	MDBG3("deleted address %x:%x:%x:%x:%x:%x:%x:%x on iface %d\n",
 	      NIP6ADDR(addr), ifa->ifa_index);
 
 	if (ifa->ifa_scope != RT_SCOPE_UNIVERSE ||
@@ -502,9 +520,9 @@ static int process_addr(struct nlmsghdr *n, void *arg)
 	parse_rtattr(rta_tb, IFA_MAX, IFA_RTA(ifa),
 		     n->nlmsg_len - NLMSG_LENGTH(sizeof(*ifa)));
 
-	if (!rta_tb[IFA_ADDRESS] || !rta_tb[IFA_CACHEINFO]) 
+	if (!rta_tb[IFA_ADDRESS] || !rta_tb[IFA_CACHEINFO])
 		return -1;
-	
+
 	if (n->nlmsg_type == RTM_NEWADDR)
 		process_new_addr(ifa, rta_tb);
 	else if (n->nlmsg_type == RTM_DELADDR)
@@ -519,7 +537,7 @@ static void __md_discover_router(struct md_inet6_iface *iface)
 {
 	MDBG("discover link on iface %s (%d)\n", iface->name, iface->ifindex);
 
-	if (md_is_link_up(iface) && 
+	if (md_is_link_up(iface) &&
 	    iface->router_solicits++ <= iface->devconf[DEVCONF_RTR_SOLICITS]) {
 		struct timespec exp_in;
 		ndisc_send_rs(iface->ifindex, &in6addr_any,
@@ -540,7 +558,7 @@ static void md_discover_router(struct tq_elem *tqe)
 	pthread_mutex_unlock(&iface_lock);
 }
 
-static void md_check_expired_coas(struct md_inet6_iface *iface, 
+static void md_check_expired_coas(struct md_inet6_iface *iface,
 				  struct md_router *rtr);
 
 static void md_link_up(struct md_inet6_iface *iface)
@@ -569,13 +587,13 @@ static void __md_new_link(struct md_inet6_iface *iface, int link_changed)
 			struct md_router *rtr;
 			rtr = list_entry(l, struct md_router, list);
 			md_expire_router(iface, rtr, NULL);
-		}		
+		}
 	}
 	md_flush_router_list(&iface->expired_rtrs);
 	md_flush_coa_list(&iface->expired_coas);
 }
 
-static inline int md_set_linklocal(struct in6_addr *lladdr, 
+static inline int md_set_linklocal(struct in6_addr *lladdr,
 				   uint8_t *hwa, unsigned short iface_type)
 {
 	memset(lladdr, 0, sizeof(struct in6_addr));
@@ -607,11 +625,11 @@ static struct md_inet6_iface *
 md_create_inet6_iface(struct ifinfomsg *ifi, struct rtattr **rta_tb)
 {
 	struct md_inet6_iface *iface;
-	
+
 	if ((iface = malloc(sizeof(struct md_inet6_iface))) != NULL) {
 		md_inet6_iface_init(iface, ifi->ifi_index);
 		if (rta_tb[IFLA_IFNAME])
-			strncpy(iface->name, RTA_DATA(rta_tb[IFLA_IFNAME]), 
+			strncpy(iface->name, RTA_DATA(rta_tb[IFLA_IFNAME]),
 				IF_NAMESIZE - 1);
 		iface->link_flags = ifi->ifi_flags;
 		iface->type = ifi->ifi_type;
@@ -619,20 +637,20 @@ md_create_inet6_iface(struct ifinfomsg *ifi, struct rtattr **rta_tb)
 			iface->hwalen = nd_get_l2addr_len(ifi->ifi_type);
 			memcpy(iface->hwa, RTA_DATA(rta_tb[IFLA_ADDRESS]),
 			       iface->hwalen);
-			md_set_linklocal(&iface->lladdr, 
+			md_set_linklocal(&iface->lladdr,
 					 iface->hwa, iface->type);
 		}
 		if (rta_tb[IFLA_PROTINFO]) {
 			struct rtattr *inet6_tb[IFLA_INET6_MAX+1];
 
 			memset(inet6_tb, 0, sizeof(inet6_tb));
-		
-			parse_rtattr(inet6_tb, IFLA_INET6_MAX, 
+
+			parse_rtattr(inet6_tb, IFLA_INET6_MAX,
 				     RTA_DATA(rta_tb[IFLA_PROTINFO]),
 				     rta_tb[IFLA_PROTINFO]->rta_len);
-		
+
 			if (inet6_tb[IFLA_INET6_CONF]) {
-				memcpy(iface->devconf, 
+				memcpy(iface->devconf,
 				       RTA_DATA(inet6_tb[IFLA_INET6_CONF]),
 				       sizeof(iface->devconf));
 			}
@@ -681,13 +699,13 @@ static int process_new_inet6_iface(struct ifinfomsg *ifi,
 		iface->link_flags = ifi->ifi_flags;
 		if (md_is_link_up(iface))
 			md_link_up(iface);
-		else 
+		else
 			md_link_down(iface);
 	}
 	return 0;
 }
 
-static int 
+static int
 process_del_inet6_iface(struct ifinfomsg *ifi, struct rtattr **rta_tb)
 {
        	struct md_inet6_iface *iface;
@@ -699,16 +717,16 @@ process_del_inet6_iface(struct ifinfomsg *ifi, struct rtattr **rta_tb)
 	return 0;
 }
 
-static int process_inet6_iface(struct nlmsghdr *n, 
+static int process_inet6_iface(struct nlmsghdr *n,
 			       struct ifinfomsg *ifi,
 			       struct rtattr **rta_tb)
 {
 	if (rta_tb[IFLA_ADDRESS] != NULL) {
 		int hwalen = nd_get_l2addr_len(ifi->ifi_type);
 		if (rta_tb[IFLA_ADDRESS]->rta_len != RTA_LENGTH(hwalen)) {
-			syslog(LOG_WARNING, 
+			syslog(LOG_WARNING,
 			       "Interface %d (%s):type %d unsupported",
-			       ifi->ifi_index, 
+			       ifi->ifi_index,
 			       (char *) RTA_DATA(rta_tb[IFLA_IFNAME]),
 			       ifi->ifi_type);
 			return -EINVAL;
@@ -730,7 +748,7 @@ static int process_new_link(struct ifinfomsg *ifi, struct rtattr **rta_tb)
 		iface->link_flags = ifi->ifi_flags;
 		if (md_is_link_up(iface))
 			md_link_up(iface);
-		else 
+		else
 			md_link_down(iface);
 	}
 	return 0;
@@ -778,11 +796,11 @@ static int process_fail_neigh(struct ndmsg *ndm, struct rtattr **rta_tb)
 	struct md_inet6_iface *iface;
 	struct md_router *rtr;
 
-	if (nud_expire_rtr && 
+	if (nud_expire_rtr &&
 	    (iface = md_get_inet6_iface(&ifaces, ndm->ndm_ifindex)) != NULL &&
 	    (rtr = md_get_first_router(&iface->default_rtr)) != NULL) {
 		struct in6_addr *addr = RTA_DATA(rta_tb[NDA_DST]);
-		if (rtr_addr_chk(rtr, addr) || 
+		if (rtr_addr_chk(rtr, addr) ||
 		    IN6_ARE_ADDR_EQUAL(&rtr->lladdr, addr)) {
 			md_router_timeout(rtr);
 		}
@@ -821,7 +839,7 @@ static int process_nlmsg(const struct sockaddr_nl *who,
 	switch (n->nlmsg_type) {
 	case RTM_NEWLINK:
 	case RTM_DELLINK:
-		/* interface or link, up or down */ 
+		/* interface or link, up or down */
 		process_link(n, arg);
 		break;
 	case RTM_NEWNEIGH:
@@ -842,7 +860,7 @@ static int process_nlmsg(const struct sockaddr_nl *who,
 }
 
 static struct prefix_list_entry *
-md_create_router_prefix(struct md_router *rtr, 
+md_create_router_prefix(struct md_router *rtr,
 			struct nd_opt_prefix_info *pinfo)
 {
 	struct prefix_list_entry *p;
@@ -857,7 +875,7 @@ md_create_router_prefix(struct md_router *rtr,
 		rtr->raddr_cnt++;
 	rtr->prefix_cnt++;
 
-	MDBG3("creating new prefix %x:%x:%x:%x:%x:%x:%x:%x/%d\n", 
+	MDBG3("creating new prefix %x:%x:%x:%x:%x:%x:%x:%x/%d\n",
 	     NIP6ADDR(&p->ple_prefix), p->ple_plen);
 
 	return p;
@@ -882,8 +900,8 @@ static void md_check_home_link(struct md_inet6_iface *i, struct md_router *rtr)
 	i->ll_dad_unsafe = ll_dad_unsafe;
 }
 
-static struct md_router *md_create_router(struct md_inet6_iface *iface, 
-					  const struct in6_addr *saddr, 
+static struct md_router *md_create_router(struct md_inet6_iface *iface,
+					  const struct in6_addr *saddr,
 					  struct nd_router_advert *ra, int len)
 {
 	struct md_router *new;
@@ -902,7 +920,7 @@ static struct md_router *md_create_router(struct md_inet6_iface *iface,
 	while (optlen > 1) {
 		int olen = opt[1] << 3;
 
-		if (olen > optlen || olen == 0) 
+		if (olen > optlen || olen == 0)
 			goto free_rtr;
 		switch (opt[0]) {
 			struct nd_opt_prefix_info *pinfo;
@@ -925,7 +943,7 @@ static struct md_router *md_create_router(struct md_inet6_iface *iface,
 
 			pinfo = (struct nd_opt_prefix_info *)opt;
 			/* internal representation host byte order */
-			pinfo->nd_opt_pi_valid_time = 
+			pinfo->nd_opt_pi_valid_time =
 				ntohl(pinfo->nd_opt_pi_valid_time);
 			pinfo->nd_opt_pi_preferred_time =
 				ntohl(pinfo->nd_opt_pi_preferred_time);
@@ -959,7 +977,7 @@ static struct md_router *md_create_router(struct md_inet6_iface *iface,
 	}
 	if (new->prefix_cnt == 0)
 		goto free_rtr;
-	
+
 	new->iface = iface;
 	new->hoplimit = ra->nd_ra_curhoplimit;
 	new->ra_flags = ra->nd_ra_flags_reserved;
@@ -978,7 +996,7 @@ static struct md_router *md_create_router(struct md_inet6_iface *iface,
 	new->ifindex = iface->ifindex;
 
 	MDBG3("creating new router "
-	      "%x:%x:%x:%x:%x:%x:%x:%x on interface %s (%d)\n", 
+	      "%x:%x:%x:%x:%x:%x:%x:%x on interface %s (%d)\n",
 	     NIP6ADDR(saddr), iface->name, iface->ifindex);
 
 	return new;
@@ -1021,10 +1039,10 @@ static int rtr_addr_match(struct md_router *r1, struct md_router *r2)
 			p2 = list_entry(l2, struct prefix_list_entry, list);
 			if (p2->ple_flags & ND_OPT_PI_FLAG_RADDR &&
 			    p1->ple_plen == p2->ple_plen &&
-			    !IN6_ARE_ADDR_EQUAL(&p1->ple_prefix, 
+			    !IN6_ARE_ADDR_EQUAL(&p1->ple_prefix,
 						&p2->ple_prefix))
 				return 0;
-			
+
 		}
 	}
 	return 1;
@@ -1038,7 +1056,7 @@ static int md_router_cmp(struct md_router *new, struct md_router *old)
 	/* Neither router nor link-local addresses match; different nodes */
 
 	if (IN6_ARE_ADDR_EQUAL(&new->lladdr, &old->lladdr)) {
-		if (new->raddr_cnt > 0 || old->raddr_cnt > 0)  
+		if (new->raddr_cnt > 0 || old->raddr_cnt > 0)
 			return !rtr_addr_match(new, old);
 		return 0;
 	}
@@ -1069,7 +1087,7 @@ static void md_probe_router(struct md_router *rtr)
 		struct timespec expires;
 
 		MDBG2("preform NUD for router "
-		      "%x:%x:%x:%x:%x:%x:%x:%x on interface %s (%d)\n", 
+		      "%x:%x:%x:%x:%x:%x:%x:%x on interface %s (%d)\n",
 		      NIP6ADDR(&rtr->lladdr), rtr->iface->name,
 		      rtr->iface->ifindex);
 
@@ -1100,9 +1118,9 @@ static void md_update_backup_router_stats(struct md_router *rtr,
 	list_for_each(l, &rtr->prefixes) {
 		struct prefix_list_entry *p;
 		p = list_entry(l, struct prefix_list_entry, list);
-		p->ple_valid_time = mpd_curr_lft(now, tstamp, 
+		p->ple_valid_time = mpd_curr_lft(now, tstamp,
 						 p->ple_valid_time);
-		p->ple_prefd_time = mpd_curr_lft(now, tstamp, 
+		p->ple_prefd_time = mpd_curr_lft(now, tstamp,
 						 p->ple_prefd_time);;
 	}
 }
@@ -1126,7 +1144,7 @@ static int md_change_to_backup_router(struct md_inet6_iface *iface,
 			del_task(&new->tqe);
 			list_del(&new->list);
 			md_update_backup_router_stats(new,
-						      &old->timestamp, 
+						      &old->timestamp,
 						      &new->timestamp);
 			md_change_default_router(iface, new, old);
 			return 0;
@@ -1140,7 +1158,7 @@ static void md_router_timeout(struct md_router *rtr)
 	struct md_inet6_iface *iface = rtr->iface;
 
 	MDBG2("expire router %x:%x:%x:%x:%x:%x:%x:%x "
-	      "without NUD on interface %s (%d)\n", 
+	      "without NUD on interface %s (%d)\n",
 	      NIP6ADDR(&rtr->lladdr), iface->name,
 	      iface->ifindex);
 
@@ -1154,7 +1172,7 @@ static void md_router_timeout(struct md_router *rtr)
 		    md_change_to_backup_router(iface, rtr)) {
 			md_expire_router(iface, rtr, NULL);
 			__md_discover_router(rtr->iface);
-			__md_trigger_movement_event(ME_RTR_EXPIRED, 0, 
+			__md_trigger_movement_event(ME_RTR_EXPIRED, 0,
 						    rtr->iface, NULL);
 		}
 	} else
@@ -1179,7 +1197,7 @@ static void md_update_router_stats(struct md_router *rtr)
 	struct list_head *list;
 	struct in6_addr coa;
 
-	MDBG2("adding default route via %x:%x:%x:%x:%x:%x:%x:%x\n", 
+	MDBG2("adding default route via %x:%x:%x:%x:%x:%x:%x:%x\n",
 	      NIP6ADDR(&rtr->lladdr));
 
 	neigh_add(rtr->ifindex, NUD_STALE, NTF_ROUTER,
@@ -1188,7 +1206,7 @@ static void md_update_router_stats(struct md_router *rtr)
 	route_add(rtr->ifindex, RT_TABLE_MAIN, RTPROT_RA,
 		  RTF_DEFAULT|RTF_ADDRCONF, 1024,
 		  &in6addr_any, 0, &in6addr_any, 0, &rtr->lladdr);
-	
+
 	list_for_each(list, &rtr->prefixes) {
 		struct prefix_list_entry *p;
 		p = list_entry(list, struct prefix_list_entry, list);
@@ -1224,23 +1242,23 @@ static void md_update_router_stats(struct md_router *rtr)
 				     rtr->iface->name, rtr->mtu);
 	if (tsisset(rtr->reachable)) {
 		set_iface_proc_entry(PROC_SYS_IP6_BASEREACHTIME_MS,
-				     rtr->iface->name, 
+				     rtr->iface->name,
 				     tstomsec(rtr->reachable));
 		rtr->iface->reachable = rtr->reachable;
 	} else {
 		set_iface_proc_entry(PROC_SYS_IP6_BASEREACHTIME_MS,
-				     rtr->iface->name, 
+				     rtr->iface->name,
 				     DEFAULT_REACHABLE_TIME);
 		tssetmsec(rtr->iface->reachable, DEFAULT_REACHABLE_TIME);
 	}
 	if (tsisset(rtr->retransmit)) {
 		set_iface_proc_entry(PROC_SYS_IP6_RETRANSTIMER_MS,
-				     rtr->iface->name, 
+				     rtr->iface->name,
 				     tstomsec(rtr->retransmit));
 		rtr->iface->retransmit = rtr->retransmit;
 	} else {
 		set_iface_proc_entry(PROC_SYS_IP6_RETRANSTIMER_MS,
-				     rtr->iface->name, 
+				     rtr->iface->name,
 				     DEFAULT_RETRANSMIT_TIMER);
 		tssetmsec(rtr->iface->retransmit, DEFAULT_RETRANSMIT_TIMER);
 	}
@@ -1259,7 +1277,7 @@ static void md_update_router(struct md_router *new, struct md_router *old)
 {
 	struct list_head *lnew, *lold, *n;
 
-	MDBG2("updating router %x:%x:%x:%x:%x:%x:%x:%x on iface %s (%d)\n", 
+	MDBG2("updating router %x:%x:%x:%x:%x:%x:%x:%x on iface %s (%d)\n",
 	      NIP6ADDR(&old->lladdr), old->iface->name, old->iface->ifindex);
 
 	if (tsisset(old->lifetime))
@@ -1291,11 +1309,11 @@ static void md_update_router(struct md_router *new, struct md_router *old)
 		} else {
 			list_for_each(lold, &old->prefixes) {
 				struct prefix_list_entry *pold;
-				pold = list_entry(lold, 
+				pold = list_entry(lold,
 						  struct prefix_list_entry,
 						  list);
 				if (pnew->ple_plen != pold->ple_plen ||
-				    ipv6_pfx_cmp(&pnew->ple_prefix, 
+				    ipv6_pfx_cmp(&pnew->ple_prefix,
 						 &pold->ple_prefix,
 						 pnew->ple_plen))
 					continue;
@@ -1352,7 +1370,7 @@ static void md_change_default_router(struct md_inet6_iface *iface,
 		__md_free_router(new);
 		return;
 	}
-	MDBG("add new router %x:%x:%x:%x:%x:%x:%x:%x on interface %s (%d)\n", 
+	MDBG("add new router %x:%x:%x:%x:%x:%x:%x:%x on interface %s (%d)\n",
 	     NIP6ADDR(&new->lladdr), new->iface->name, new->iface->ifindex);
 
 	list_for_each(l, &new->prefixes) {
@@ -1361,7 +1379,7 @@ static void md_change_default_router(struct md_inet6_iface *iface,
 
 		p = list_entry(l, struct prefix_list_entry, list);
 
-		if (old && prefix_list_find(&old->prefixes, 
+		if (old && prefix_list_find(&old->prefixes,
 					    &p->ple_prefix, p->ple_plen)) {
 			link_changed = 0;
 			new_prefix = 0;
@@ -1394,19 +1412,19 @@ md_check_expired_coas(struct md_inet6_iface *iface, struct md_router *rtr)
 {
 	struct list_head *clist, *n;
 	struct list_head *plist;
-	
+
 	list_for_each(plist, &rtr->prefixes) {
 		struct prefix_list_entry *p;
 		p = list_entry(plist, struct prefix_list_entry, list);
-		list_for_each_safe(clist, n, &iface->expired_coas) { 
+		list_for_each_safe(clist, n, &iface->expired_coas) {
 			struct md_coa *coa;
 			coa = list_entry(clist, struct md_coa, list);
 
-			if (ipv6_pfx_cmp(&p->ple_prefix,  
+			if (ipv6_pfx_cmp(&p->ple_prefix,
 					 &coa->addr, coa->plen))
 				continue;
 
-			MDBG2("CoA %x:%x:%x:%x:%x:%x:%x:%x still usable\n", 
+			MDBG2("CoA %x:%x:%x:%x:%x:%x:%x:%x still usable\n",
 			      NIP6ADDR(&coa->addr));
 
 			list_del(&coa->list);
@@ -1416,11 +1434,11 @@ md_check_expired_coas(struct md_inet6_iface *iface, struct md_router *rtr)
 }
 
 
-static int 
+static int
 md_check_expired_routers(struct md_inet6_iface *iface, struct md_router *new)
 {
 	struct list_head *list, *n;
-	
+
 	list_for_each_safe(list, n, &iface->expired_rtrs) {
 		struct md_router *old;
 		old = list_entry(list, struct md_router, list);
@@ -1435,13 +1453,13 @@ md_check_expired_routers(struct md_inet6_iface *iface, struct md_router *new)
 
 			tssub(new->timestamp, old->timestamp, diff);
 			passed_ms = tstomsec(diff);
-			valid_ms = adv_ivals_dad_limit * 
+			valid_ms = adv_ivals_dad_limit *
 				tstomsec(old->adv_ival);
-			
+
 			if (passed_ms >= valid_ms)
 				break;
 
-			MDBG2("router %x:%x:%x:%x:%x:%x:%x:%x still usable\n", 
+			MDBG2("router %x:%x:%x:%x:%x:%x:%x:%x still usable\n",
 			      NIP6ADDR(&old->lladdr));
 
 			md_update_router(new, old);
@@ -1455,7 +1473,7 @@ md_check_expired_routers(struct md_inet6_iface *iface, struct md_router *new)
 							    iface, NULL);
 			return 1;
 		}
-		
+
 	}
 	return 0;
 }
@@ -1464,7 +1482,7 @@ static int
 md_check_backup_routers(struct md_inet6_iface *iface, struct md_router *new)
 {
 	struct list_head *list, *n;
-	
+
 	list_for_each_safe(list, n, &iface->backup_rtrs) {
 		struct md_router *old;
 		old = list_entry(list, struct md_router, list);
@@ -1489,7 +1507,7 @@ static void md_add_backup_router(struct md_inet6_iface *iface,
 		return;
 	}
 
-	MDBG("add new backup router %x:%x:%x:%x:%x:%x:%x:%x on interface %s (%d)\n", 
+	MDBG("add new backup router %x:%x:%x:%x:%x:%x:%x:%x on interface %s (%d)\n",
 	     NIP6ADDR(&new->lladdr), new->iface->name, new->iface->ifindex);
 
 	list_add(&new->list, &iface->backup_rtrs);
@@ -1498,12 +1516,12 @@ static void md_add_backup_router(struct md_inet6_iface *iface,
 	add_task_abs(&expires, &new->tqe, md_router_timeout_probe);
 }
 
-static void 
+static void
 md_check_default_router(struct md_inet6_iface *iface, struct md_router *new)
 {
 	struct md_router *old;
 
-	MDBG2("looking for existing routers on iface %s (%d)\n", 
+	MDBG2("looking for existing routers on iface %s (%d)\n",
 	      iface->name, iface->ifindex);
 
 	if ((old = md_get_first_router(&iface->default_rtr)) != NULL) {
@@ -1520,7 +1538,7 @@ md_check_default_router(struct md_inet6_iface *iface, struct md_router *new)
 							    iface, NULL);
 			}
 			return;
-		} 
+		}
 		if (conf.MnRouterProbes > 0) {
 			md_probe_router(old);
 			md_add_backup_router(iface, new);
@@ -1560,16 +1578,16 @@ static void md_recv_na(const struct icmp6_hdr *ih, ssize_t len,
 	opt = (uint8_t *)(na + 1);
 	hwa = NULL;
 
-	MDBG2("received NA from %x:%x:%x:%x:%x:%x:%x:%x on iface %s (%d)\n", 
+	MDBG2("received NA from %x:%x:%x:%x:%x:%x:%x:%x on iface %s (%d)\n",
 	      NIP6ADDR(&rtr->lladdr), iface->name, iface->ifindex);
-		
-		
+
+
 	while (optlen > 1) {
 		int olen = opt[1] << 3;
-		
-		if (olen > optlen || olen == 0) 
+
+		if (olen > optlen || olen == 0)
 			goto out;
-		
+
 		switch (opt[0]) {
 		case ND_OPT_TARGET_LINKADDR:
 			hwa = &opt[2];
@@ -1622,7 +1640,7 @@ static void md_recv_ra(const struct icmp6_hdr *ih, ssize_t len,
 	    !conf.pmgr.accept_ra(iif, saddr, daddr, ra))
 		return;
 
-	MDBG2("received RA from %x:%x:%x:%x:%x:%x:%x:%x on iface %d\n", 
+	MDBG2("received RA from %x:%x:%x:%x:%x:%x:%x:%x on iface %d\n",
 	      NIP6ADDR(saddr), iif);
 
 	pthread_mutex_lock(&iface_lock);
@@ -1681,25 +1699,25 @@ int md_init(void)
 	val = RTNLGRP_LINK;
 	if (setsockopt(md_rth.fd, SOL_NETLINK,
 		       NETLINK_ADD_MEMBERSHIP, &val, sizeof(val)) < 0) {
-		dbg("%d %s\n", __LINE__, strerror(errno));  
+		dbg("%d %s\n", __LINE__, strerror(errno));
 		return -1;
 	}
 	val = RTNLGRP_NEIGH;
 	if (setsockopt(md_rth.fd, SOL_NETLINK,
 		       NETLINK_ADD_MEMBERSHIP, &val, sizeof(val)) < 0) {
-		dbg("%d %s\n", __LINE__, strerror(errno));  
+		dbg("%d %s\n", __LINE__, strerror(errno));
 		return -1;
 	}
 	val = RTNLGRP_IPV6_IFADDR;
 	if (setsockopt(md_rth.fd, SOL_NETLINK,
 		       NETLINK_ADD_MEMBERSHIP, &val, sizeof(val)) < 0) {
-		dbg("%d %s\n", __LINE__, strerror(errno));  
+		dbg("%d %s\n", __LINE__, strerror(errno));
 		return -1;
 	}
 	val = RTNLGRP_IPV6_IFINFO;
 	if (setsockopt(md_rth.fd, SOL_NETLINK,
 		       NETLINK_ADD_MEMBERSHIP, &val, sizeof(val)) < 0) {
-		dbg("%d %s\n", __LINE__, strerror(errno));  
+		dbg("%d %s\n", __LINE__, strerror(errno));
 		return -1;
 	}
 	iface_default_proc_entries_init();
@@ -1741,7 +1759,7 @@ static void iface_proc_entries_cleanup(struct md_inet6_iface *iface)
 			     iface->devconf[DEVCONF_AUTOCONF]);
 	set_iface_proc_entry(PROC_SYS_IP6_ACCEPT_RA_DEFRTR, iface->name,
 			     iface->devconf[DEVCONF_ACCEPT_RA_DEFRTR]);
-	set_iface_proc_entry(PROC_SYS_IP6_RTR_SOLICITS, iface->name, 
+	set_iface_proc_entry(PROC_SYS_IP6_RTR_SOLICITS, iface->name,
 			     iface->devconf[DEVCONF_RTR_SOLICITS]);
 }
 

@@ -1,12 +1,12 @@
 ## $Id: Makefile.am 1.55 06/05/07 17:37:11+03:00 anttit@tcs.hut.fi $
 ## Process this file with automake to produce Makefile.in
 
-AM_CFLAGS = -Wall -Wpointer-arith -Wreturn-type -pedantic -std=gnu99
-AM_CPPFLAGS = -isystem ../include
+AM_CFLAGS = -Wall -g -Wpointer-arith -Wreturn-type -pedantic -std=gnu99 -DUSE_RADIUS -DCACHE_RADIUS
+AM_CPPFLAGS = -isystem ../include -I../src -I./pmip -I/usr/local/include
 AM_YFLAGS = -d
 
 defpath.h: Makefile.am
-	echo "#define DEFAULT_CONFIG_FILE \"$(sysconfdir)/mip6d.conf\"" > $@
+	echo "#define DEFAULT_CONFIG_FILE \"$(sysconfdir)/pmip6d.conf\"" > $@
 
 pmgr.c: mk-pmgr_c.sh pmgr.c.in policy.h
 	sh mk-pmgr_c.sh
@@ -17,9 +17,9 @@ pmgr.h: mk-pmgr_h.sh pmgr.h.in policy.h
 BUILT_SOURCES = defpath.h pmgr.c pmgr.h
 EXTRA_DIST = mk-pmgr_c.sh mk-pmgr_h.sh pmgr.c.in pmgr.h.in
 
-sbin_PROGRAMS = mip6d
+sbin_PROGRAMS = pmip6d
 
-mip6d_SOURCES = pmgr.c pmgr.h defpath.h \
+pmip6d_SOURCES = pmgr.c pmgr.h defpath.h \
 		main.c vars.c mipv6.h \
 		conf.c conf.h \
 		gram.y scan.l \
@@ -48,24 +48,48 @@ mip6d_SOURCES = pmgr.c pmgr.h defpath.h \
 		xfrm.c xfrm.h \
 		proc_sys.c proc_sys.h \
 		prefix.c prefix.h \
-		ipsec.c ipsec.h
+		ipsec.c ipsec.h \
+		./pmip/pmip.h \
+        ./pmip/pmip_cache.c \
+        ./pmip/pmip_cache.h \
+        ./pmip/pmip_config.h \
+        ./pmip/pmip_consts.h \
+        ./pmip/pmip_fsm.c \
+        ./pmip/pmip_fsm.h \
+        ./pmip/pmip_handler.c \
+        ./pmip/pmip_handler.h \
+        ./pmip/pmip_hnp_cache.c \
+        ./pmip/pmip_hnp_cache.h \
+        ./pmip/pmip_init.c \
+        ./pmip/pmip_init.h \
+        ./pmip/pmip_lma_proc.c \
+        ./pmip/pmip_lma_proc.h \
+        ./pmip/pmip_mag_proc.c \
+        ./pmip/pmip_mag_proc.h \
+        ./pmip/pmip_msgs.c \
+        ./pmip/pmip_msgs.h \
+        ./pmip/pmip_pcap.c \
+        ./pmip/pmip_pcap.h \
+        ./pmip/pmip_tunnel.c \
+        ./pmip/pmip_tunnel.h \
+        ./pmip/pmip_types.h
 
 if ENABLE_VT
-mip6d_SOURCES += vt.c vt.h
+pmip6d_SOURCES += vt.c vt.h
 endif
 
 if BUILTIN_CRYPTO
-mip6d_SOURCES += crypto.c crypto.h
+pmip6d_SOURCES += crypto.c crypto.h
 endif
 
-mip6d_LDADD = 
+pmip6d_LDADD =  -lpcap  -lfreeradius-client
 
 if MISSING
-mip6d_LDADD += -L../libmissing -lmissing
+pmip6d_LDADD += -L../libmissing -lmissing
 endif
 
 if LOCAL_NETLINK
-mip6d_LDADD += -L../libnetlink -lnetlink
+pmip6d_LDADD += -L../libnetlink -lnetlink
 endif
 
 noinst_HEADERS = ../include/netinet/icmp6.h \

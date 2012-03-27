@@ -22,7 +22,7 @@
 
 /* Constants below have no explicit names in the spec. */
 
-#define MAX_BINDING_LIFETIME     (0xffff << 2) /* seconds */  
+#define MAX_BINDING_LIFETIME     (0xffff << 2) /* seconds */
 
 /* Maximum time for a binding to be unused for CN to still send a BRR
  * before the binding expires */
@@ -39,6 +39,7 @@
 
 /* 6.2.7: 96 bits */
 #define MIPV6_DIGEST_LEN    12
+
 
 extern const struct timespec initial_bindack_timeout_ts;
 extern const struct timespec initial_dhaad_timeout_ts;

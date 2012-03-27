@@ -2,7 +2,7 @@
  * $Id: mh.c 1.103 06/05/07 21:52:43+03:00 anttit@tcs.hut.fi $
  *
  * This file is part of the MIPL Mobile IPv6 for Linux.
- * 
+ *
  * Authors: Antti Tuominen <anttit@tcs.hut.fi>
  *          Ville Nuorvala <vnuorval@tcs.hut.fi>
  *
@@ -23,6 +23,24 @@
  * along with MIPL Mobile IPv6 for Linux; if not, write to the Free
  * Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
  * 02111-1307 USA.
+ */
+/*
+ * This file is part of the PMIP, Proxy Mobile IPv6 for Linux.
+ *
+ * Authors: OPENAIR3 <openair_tech@eurecom.fr>
+ *
+ * Copyright 2010-2011 EURECOM (Sophia-Antipolis, FRANCE)
+ * 
+ * Proxy Mobile IPv6 (or PMIPv6, or PMIP) is a network-based mobility 
+ * management protocol standardized by IETF. It is a protocol for building 
+ * a common and access technology independent of mobile core networks, 
+ * accommodating various access technologies such as WiMAX, 3GPP, 3GPP2 
+ * and WLAN based access architectures. Proxy Mobile IPv6 is the only 
+ * network-based mobility management protocol standardized by IETF.
+ * 
+ * PMIP Proxy Mobile IPv6 for Linux has been built above MIPL free software;
+ * which it involves that it is under the same terms of GNU General Public
+ * License version 2. See MIPL terms condition if you need more details. 
  */
 
 #ifdef HAVE_CONFIG_H
@@ -51,6 +69,11 @@
 #include "conf.h"
 #include "bcache.h"
 #include "keygen.h"
+/////////////////////////////////
+//Added for PMIP
+#include "pmip_types.h"
+//#include "pmip_consts.h" (in mh.h)
+/////////////////////////////////
 
 #define MH_DEBUG_LEVEL 1
 
@@ -60,16 +83,12 @@
 #define MDBG(x...)
 #endif
 
-struct sock {
-	pthread_mutex_t send_mutex;
-	int fd;
-};
 
-static struct sock mh_sock;
+struct sock mh_sock;
 
 /* Are duplicate options allowed */
 int mh_opts_dup_ok[] = {
-	1, /* PAD1 */ 
+	1, /* PAD1 */
 	1, /* PADN */
 	0, /* BRR */
 	0, /* Alternate CoA */
@@ -91,7 +110,7 @@ static inline int mh_type_map(uint8_t type)
 
 static inline struct mh_handler *mh_handler_get(uint8_t type)
 {
-	return handlers[mh_type_map(type)]; 
+	return handlers[mh_type_map(type)];
 }
 
 void mh_handler_reg(uint8_t type, struct mh_handler *handler)
@@ -108,7 +127,7 @@ void mh_handler_reg(uint8_t type, struct mh_handler *handler)
 
 void mh_handler_dereg(uint8_t type, struct mh_handler *handler)
 {
-	struct mh_handler **h; 
+	struct mh_handler **h;
 	int i = mh_type_map(type);
 	pthread_rwlock_wrlock(&handler_lock);
 	h = &handlers[i];
@@ -216,6 +235,8 @@ static const size_t _mh_len[] = {
 	sizeof(struct ip6_mh_binding_update),
 	sizeof(struct ip6_mh_binding_ack),
 	sizeof(struct ip6_mh_binding_error)
+//LG    sizeof(ip6_mh_proxy_binding_request_t),
+//LG    sizeof(ip6_mh_proxy_binding_response_t)
 };
 
 /**
@@ -490,7 +511,7 @@ static int calculate_auth_data(const struct iovec *iov, int iovlen,
 	HMAC_SHA1_update(&ctx, (uint8_t *)coa, sizeof(*coa));
 	HMAC_SHA1_update(&ctx, (uint8_t *)cn, sizeof(*coa));
 	for (i = 0; i < iovlen; i++) {
-		HMAC_SHA1_update(&ctx, (uint8_t *)iov[i].iov_base, 
+		HMAC_SHA1_update(&ctx, (uint8_t *)iov[i].iov_base,
 				 iov[i].iov_len);
 	}
 	HMAC_SHA1_final(&ctx, buf);
@@ -538,7 +559,7 @@ int mh_send(const struct in6_addr_bundle *addrs, const struct iovec *mh_vec,
 {
 	struct ip6_mh_opt_auth_data lbad;
 	struct sockaddr_in6 daddr;
-	
+
 	struct iovec iov[2*(IP6_MHOPT_MAX+1)];
 	struct msghdr msg;
 	struct cmsghdr *cmsg;
@@ -568,7 +589,7 @@ int mh_send(const struct in6_addr_bundle *addrs, const struct iovec *mh_vec,
 	     "from %x:%x:%x:%x:%x:%x:%x:%x\n"
 	     "to %x:%x:%x:%x:%x:%x:%x:%x\n",
 	     mh->ip6mh_type, NIP6ADDR(addrs->src), NIP6ADDR(addrs->dst));
-	    
+
 	if (addrs->local_coa)
 		MDBG("local CoA %x:%x:%x:%x:%x:%x:%x:%x\n",
 		     NIP6ADDR(addrs->local_coa));
@@ -578,25 +599,25 @@ int mh_send(const struct in6_addr_bundle *addrs, const struct iovec *mh_vec,
 		     NIP6ADDR(addrs->remote_coa));
 
 	if (bind_key) {
-		assert(iov_count > 1); 
+		assert(iov_count > 1);
 		struct ip6_mh_opt_auth_data *bauth;
 		struct iovec *biov;
 		struct in6_addr *cn = NULL;
 		MDBG("Adding bind auth data\n");
 		if (mh->ip6mh_type == IP6_MH_TYPE_BU)
 			cn = addrs->dst;
-		else 
+		else
 			cn = addrs->src;
-		assert(addrs->bind_coa != NULL && cn != NULL); 
+		assert(addrs->bind_coa != NULL && cn != NULL);
 		biov = &iov[iov_count - 1];
 		bauth = (struct ip6_mh_opt_auth_data *)biov->iov_base;
-		
+
 		if (bauth->ip6moad_type == IP6_MHOPT_BAUTH) {
 			size_t orig_len = biov->iov_len;
-			
+
 			MDBG("Adding auth_data\n");
 			memcpy(&lbad, bauth, sizeof(lbad));
-			
+
 			/* temporarily set iov_len to option header
 			 * length for auth data calculation */
 			biov->iov_len -= MIPV6_DIGEST_LEN;
@@ -639,7 +660,7 @@ int mh_send(const struct in6_addr_bundle *addrs, const struct iovec *mh_vec,
 	msg.msg_iovlen = iov_count;
 	msg.msg_name = (void *)&daddr;
 	msg.msg_namelen = sizeof(daddr);
-	
+
 	cmsg = CMSG_FIRSTHDR(&msg);
 	cmsg->cmsg_len = CMSG_LEN(sizeof(pinfo));
 	cmsg->cmsg_level = IPPROTO_IPV6;
@@ -697,10 +718,10 @@ static int mh_opt_len_chk(uint8_t type, int len)
 	case IP6_MHOPT_PADN:
 	default:
 		return 0;
-	}	
+	}
 }
 
-		
+
 /**
  * mh_opt_parse - parse mobility options
  * @mh_opts: pointer to mh_options structure
@@ -725,6 +746,7 @@ int mh_opt_parse(const struct ip6_mh *mh, ssize_t len, ssize_t offset,
 	memset(mh_opts, 0, sizeof(*mh_opts));
 	while (left > 0) {
 		struct ip6_mh_opt *op = (struct ip6_mh_opt *)&opts[i];
+        MDBG("Parsing  op->ip6mhopt_type %d\n", op->ip6mhopt_type);
 		/* make sure the binding authorization data is last */
 		if (bauth)
 			return -EINVAL;
@@ -733,12 +755,13 @@ int mh_opt_parse(const struct ip6_mh *mh, ssize_t len, ssize_t offset,
 			left--;
 			i++;
 			continue;
-		} 
+		}
 		if (left < sizeof(struct ip6_mh_opt) ||
 		    mh_opt_len_chk(op->ip6mhopt_type, op->ip6mhopt_len + 2)) {
 			syslog(LOG_ERR,
 			       "Kernel failed to catch malformed Mobility Option type %d. Update kernel!",
 			       op->ip6mhopt_type);
+			MDBG("left %d < sizeof(struct ip6_mh_opt) %d \n", left, sizeof(struct ip6_mh_opt));
 			return -EINVAL;
 		}
 		if (op->ip6mhopt_type == IP6_MHOPT_PADN) {
@@ -754,8 +777,10 @@ int mh_opt_parse(const struct ip6_mh *mh, ssize_t len, ssize_t offset,
 				mh_opts->opts[op->ip6mhopt_type] = i;
 			else if (mh_opts_dup_ok[op->ip6mhopt_type])
 				mh_opts->opts_end[op->ip6mhopt_type] = i;
-			else
+			else {
+                MDBG("ERROR op->ip6mhopt_type %d\n", op->ip6mhopt_type);
 				return -EINVAL;
+			}
 			ret++;
 		}
 		left -= op->ip6mhopt_len + 2;
@@ -871,7 +896,7 @@ ssize_t mh_recv(unsigned char *msg, size_t msglen,
 	return len;
 }
 
-void mh_send_be(struct in6_addr *dst, struct in6_addr *hoa, 
+void mh_send_be(struct in6_addr *dst, struct in6_addr *hoa,
 		struct in6_addr *src, uint8_t status, int iif)
 {
 	struct ip6_mh_binding_error *be;
@@ -927,16 +952,16 @@ void mh_send_brr(struct in6_addr *mn_addr, struct in6_addr *local)
 	addrs.dst = mn_addr;
 	addrs.remote_coa = NULL;
 	addrs.local_coa = NULL;
-	
+
 	if (!mh_create(&mh_vec, IP6_MH_TYPE_BRR))
 		return;
-	
+
 	mh_send(&addrs, &mh_vec, 1, NULL, 0);
 	free_iov_data(&mh_vec, 1);
 }
 
 void mh_send_ba(const struct in6_addr_bundle *addrs, uint8_t status,
-		uint8_t flags, uint16_t sequence, 
+		uint8_t flags, uint16_t sequence,
 		const struct timespec *lifetime, const uint8_t *key, int iif)
 {
 	int iovlen = 1;
@@ -960,7 +985,7 @@ void mh_send_ba(const struct in6_addr_bundle *addrs, uint8_t status,
 		if (conf.pmgr.use_bradv(addrs->dst, addrs->bind_coa,
 					addrs->src, lifetime, &refresh) &&
 		    tsbefore(*lifetime, refresh))
-			mh_create_opt_refresh_advice(&mh_vec[iovlen++], 
+			mh_create_opt_refresh_advice(&mh_vec[iovlen++],
 						     refresh.tv_sec);
 	}
 	if (key)
@@ -984,10 +1009,10 @@ int mh_bu_parse(struct ip6_mh_binding_update *bu, ssize_t len,
 
 	MDBG("Binding Update Received\n");
 	if (len < sizeof(struct ip6_mh_binding_update) ||
-	    mh_opt_parse(&bu->ip6mhbu_hdr, len, 
+	    mh_opt_parse(&bu->ip6mhbu_hdr, len,
 			 sizeof(struct ip6_mh_binding_update), mh_opts) < 0)
 		return -1;
-			 
+
 	peer_addr = in_addrs->src;
 	if (!in6_is_addr_routable_unicast(peer_addr))
 		return -1;
@@ -1035,7 +1060,7 @@ int mh_bu_parse(struct ip6_mh_binding_update *bu, ssize_t len,
 		return -1;
 
 	MDBG("src %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(peer_addr));
-	MDBG("coa %x:%x:%x:%x:%x:%x:%x:%x\n", 
+	MDBG("coa %x:%x:%x:%x:%x:%x:%x:%x\n",
 	     NIP6ADDR(out_addrs->bind_coa));
 
 	if (tsisset(*lifetime))
@@ -1053,10 +1078,10 @@ int mh_bu_parse(struct ip6_mh_binding_update *bu, ssize_t len,
 		return -1;
 	/* Authenticator is calculated with MH checksum set to 0 */
 	bu->ip6mhbu_hdr.ip6mh_cksum = 0;
-	if (mh_verify_auth_data(bu, len, bauth, 
+	if (mh_verify_auth_data(bu, len, bauth,
 				out_addrs->bind_coa, our_addr, key) < 0)
 		return -1;
-	
+
 	return IP6_MH_BAS_ACCEPTED;
 }
 
