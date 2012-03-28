@@ -9,11 +9,11 @@
 #include "pmgr.h"
 
 struct mip6_config {
-    /* Common options */
-    char            *config_file;
+	/* Common options */
+	char *config_file;
 #ifdef ENABLE_VT
-    char            *vt_hostname;
-    char            *vt_service;
+	char *vt_hostname;
+	char *vt_service;
 #endif
     unsigned int    mip6_entity;
     unsigned int    debug_level;
@@ -101,13 +101,12 @@ struct mip6_config {
 };
 
 struct net_iface {
-    struct list_head list;
-    char name[IF_NAMESIZE];
-    int ifindex;
-    int is_rtr;
-    int mip6_if_entity;
-    int mn_if_preference;
-	int is_tunnel;
+	struct list_head list;
+	char name[IF_NAMESIZE];
+	int ifindex;
+	int is_rtr;
+	int mip6_if_entity;
+	int mn_if_preference;
 };
 
 extern struct mip6_config conf;
@@ -121,17 +120,17 @@ extern struct mip6_config conf;
 
 static inline int is_cn(void)
 {
-    return conf.mip6_entity == MIP6_ENTITY_CN;
+	return conf.mip6_entity == MIP6_ENTITY_CN;
 }
 
 static inline int is_mn(void)
 {
-    return conf.mip6_entity == MIP6_ENTITY_MN;
+	return conf.mip6_entity == MIP6_ENTITY_MN;
 }
 
 static inline int is_ha(void)
 {
-    return conf.mip6_entity == MIP6_ENTITY_HA;
+	return conf.mip6_entity == MIP6_ENTITY_HA;
 }
 
 static inline int is_mag(void)
@@ -146,27 +145,27 @@ static inline int is_lma(void)
 
 static inline int is_if_entity_set(struct net_iface *i)
 {
-    return i->mip6_if_entity != MIP6_ENTITY_NO;
+	return i->mip6_if_entity != MIP6_ENTITY_NO;
 
 }
 
 static inline int is_if_cn(struct net_iface *i)
 {
-    return (is_cn() &&
-            (!is_if_entity_set(i) || i->mip6_if_entity == MIP6_ENTITY_CN));
+	return (is_cn() &&
+		(!is_if_entity_set(i) || i->mip6_if_entity == MIP6_ENTITY_CN));
 
 }
 
 static inline int is_if_mn(struct net_iface *i)
 {
-    return (is_mn() &&
-            (!is_if_entity_set(i) || i->mip6_if_entity == MIP6_ENTITY_MN));
+	return (is_mn() &&
+		(!is_if_entity_set(i) || i->mip6_if_entity == MIP6_ENTITY_MN));
 }
 
 static inline int is_if_ha(struct net_iface *i)
 {
-    return (is_ha() &&
-            (!is_if_entity_set(i) || i->mip6_if_entity == MIP6_ENTITY_HA));
+	return (is_ha() &&
+		(!is_if_entity_set(i) || i->mip6_if_entity == MIP6_ENTITY_HA));
 }
 
 static inline int is_if_lma(struct net_iface *i)
