@@ -163,7 +163,7 @@ void pmip_timer_bce_expired_handler(struct tq_elem *tqe)
         if (is_mag()) {
             dbg("Send NS for Neighbour Reachability for:%x:%x:%x:%x:%x:%x:%x:%x iif=%d\n", NIP6ADDR(&e->mn_hw_address), e->link);
             //Create NS for Reachability test!
-            ndisc_send_ns(e->link, &conf.MagAddressIngress, solicited_mcast(&e->mn_suffix), get_mn_addr(e));
+            ndisc_send_ns(e->link, get_mn_addr(e));
 
 
             struct timespec expires;
