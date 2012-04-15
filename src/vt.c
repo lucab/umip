@@ -28,6 +28,24 @@
  * VT server performs select(2) and only one client access is allowed.
  * To be accept multiple connect, fix "vt_connect_handle".
  */
+/*
+ * This file is part of the PMIP, Proxy Mobile IPv6 for Linux.
+ *
+ * Authors: OPENAIR3 <openair_tech@eurecom.fr>
+ *
+ * Copyright 2010-2011 EURECOM (Sophia-Antipolis, FRANCE)
+ * 
+ * Proxy Mobile IPv6 (or PMIPv6, or PMIP) is a network-based mobility 
+ * management protocol standardized by IETF. It is a protocol for building 
+ * a common and access technology independent of mobile core networks, 
+ * accommodating various access technologies such as WiMAX, 3GPP, 3GPP2 
+ * and WLAN based access architectures. Proxy Mobile IPv6 is the only 
+ * network-based mobility management protocol standardized by IETF.
+ * 
+ * PMIP Proxy Mobile IPv6 for Linux has been built above MIPL free software;
+ * which it involves that it is under the same terms of GNU General Public
+ * License version 2. See MIPL terms condition if you need more details. 
+ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -66,6 +84,7 @@
 #include "mpdisc_mn.h"
 #include "mpdisc_ha.h"
 #include "statistics.h"
+#include "pmip_cache.h"
 
 #define VT_PKT_BUFLEN		(8192)
 #define VT_REPLY_BUFLEN		(LINE_MAX)
@@ -822,6 +841,120 @@ static int bcache_vt_dump(void *data, void *arg)
 
 	return 0;
 }
+
+//////////////////////////////////////////////////
+//Defined for PMIP///////////////////////////////
+/////////////////////////////////////////////////
+struct pmip_cache_vt_arg {
+    const struct vt_handle *vh;
+};
+
+static int pmip_cache_vt_dump(void *data, void *arg)
+{
+    pmip_entry_t *bce = (pmip_entry_t *)data;
+    struct pmip_cache_vt_arg *bva = (struct pmip_cache_vt_arg *)arg;
+    const struct vt_handle *vh = bva->vh;
+    struct timespec ts_now;
+
+    tsclear(ts_now);
+
+    fprintf_bl(vh, "peer_addr %x:%x:%x:%x:%x:%x:%x:%x",
+           NIP6ADDR(&bce->mn_suffix));
+
+
+    fprintf_b(vh, " status %s",
+          (bce->type == BCE_PMIP) ? "PMIP" :
+          (bce->type == BCE_TEMP) ? "TEMP" :
+          (bce->type == BCE_CN) ? "CN" :
+          "(unknown)");
+
+    fprintf(vh->vh_stream, "\n");
+
+    fprintf(vh->vh_stream, " Serv_MAG_addr %x:%x:%x:%x:%x:%x:%x:%x",
+        NIP6ADDR(&bce->mn_serv_mag_addr));
+
+    fprintf(vh->vh_stream, " LMA_addr %x:%x:%x:%x:%x:%x:%x:%x",
+        NIP6ADDR(&bce->mn_serv_lma_addr));
+
+    fprintf(vh->vh_stream, " local %x:%x:%x:%x:%x:%x:%x:%x",
+        NIP6ADDR(&bce->our_addr));
+
+    if (vh->vh_opt.verbose == VT_BOOL_TRUE) {
+        char buf[IF_NAMESIZE + 1];
+        char *dev;
+
+        if (bce->tunnel) {
+            fprintf(vh->vh_stream, " tunnel %d",bce->tunnel);
+
+            dev = if_indextoname(bce->tunnel, buf);
+            if (!dev || strlen(dev) == 0)
+                fprintf(vh->vh_stream, "(%d)", bce->tunnel);
+            else
+                fprintf(vh->vh_stream, "%s", dev);
+        }
+        if (bce->link) {
+            fprintf(vh->vh_stream, " link ");
+
+            dev = if_indextoname(bce->link, buf);
+            if (!dev || strlen(dev) == 0)
+                fprintf(vh->vh_stream, "(%d)", bce->link);
+            else
+                fprintf(vh->vh_stream, "%s", dev);
+        }
+    }
+
+    fprintf(vh->vh_stream, "\n");
+
+    fprintf(vh->vh_stream, " lifetime ");
+
+    if (clock_gettime(CLOCK_REALTIME, &ts_now) != 0)
+        fprintf(vh->vh_stream, "(error)");
+    else {
+        if (tsafter(ts_now, bce->add_time))
+            fprintf(vh->vh_stream, "(broken)");
+        else {
+            struct timespec ts;
+
+            tssub(ts_now, bce->add_time, ts);
+            /* "ts" is now time how log it alives */
+            if (tsafter(bce->lifetime, ts)) {
+                tssub(ts, bce->lifetime, ts);
+                fprintf(vh->vh_stream, "-%ld", ts.tv_sec);
+            } else {
+                tssub(bce->lifetime, ts, ts);
+                fprintf(vh->vh_stream, "%ld", ts.tv_sec);
+            }
+        }
+    }
+    fprintf(vh->vh_stream, " / %ld", bce->lifetime.tv_sec);
+
+    fprintf(vh->vh_stream, " seq %u", bce->seqno_out);
+
+    fprintf(vh->vh_stream, "\n");
+
+    return 0;
+}
+
+static int pmip_cache_vt_cmd_pbc(const struct vt_handle *vh, const char *str)
+{
+    struct pmip_cache_vt_arg bva;
+    bva.vh = vh;
+
+    if (strlen(str) > 0) {
+        fprintf(vh->vh_stream, "unknown args\n");
+        return 0;
+    }
+
+    pmip_cache_iterate(pmip_cache_vt_dump, &bva);
+    return 0;
+}
+
+static struct vt_cmd_entry vt_cmd_pbc = {
+    .cmd = "pmip",
+    .parser = pmip_cache_vt_cmd_pbc,
+};
+////////////////////////////////////////////////////////////
+
 
 static int vt_str_to_uint32(const struct vt_handle *vh, const char *str,
 			    uint32_t *val)
@@ -1779,6 +1912,18 @@ int vt_bc_init(void)
 
 	return 0;
 }
+
+//Defined for PMIP////////////////
+int vt_pbc_init(void)
+{
+    int ret;
+    ret = vt_cmd_add_root(&vt_cmd_pbc);
+    if (ret < 0)
+    return ret;
+
+    return 0;
+}
+//////////////////////////////////
 
 int vt_init(void)
 {
