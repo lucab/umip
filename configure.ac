@@ -89,6 +89,39 @@ AC_CHECK_LIB(pthread, pthread_create, [], [
 	AC_MSG_ERROR([POSIX thread library required but not found.])
 ])
 
+AC_CHECK_LIB(pcap, pcap_compile, [], [
+	AC_MSG_ERROR([PCAP library required but not found.])
+])
+AC_CHECK_LIB(pcap, pcap_open_live, [], [
+	AC_MSG_ERROR([PCAP library required but not found.])
+])
+AC_CHECK_LIB(pcap, pcap_lookupnet, [], [
+	AC_MSG_ERROR([PCAP library required but not found.])
+])
+AC_CHECK_LIB(pcap, pcap_setfilter, [], [
+	AC_MSG_ERROR([PCAP library required but not found.])
+])
+AC_CHECK_LIB(pcap, pcap_next, [], [
+	AC_MSG_ERROR([PCAP library required but not found.])
+])
+
+AC_CHECK_LIB(freeradius-client, rc_read_config, [], [
+	AC_MSG_ERROR([freeradius-client library required but not found.])
+])
+AC_CHECK_LIB(freeradius-client, rc_read_dictionary, [], [
+	AC_MSG_ERROR([freeradius-client library required but not found.])
+])
+AC_CHECK_LIB(freeradius-client, rc_avpair_add, [], [
+	AC_MSG_ERROR([freeradius-client library required but not found.])
+])
+AC_CHECK_LIB(freeradius-client, rc_avpair_get, [], [
+	AC_MSG_ERROR([freeradius-client library required but not found.])
+])
+AC_CHECK_LIB(freeradius-client, rc_avpair_free, [], [
+	AC_MSG_ERROR([freeradius-client library required but not found.])
+])
+
+
 AC_CHECK_LIB(netlink, rtnl_talk)
 AM_CONDITIONAL(LOCAL_NETLINK, test x$ac_cv_lib_netlink_rtnl_talk = xno)
 

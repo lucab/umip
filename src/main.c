@@ -24,6 +24,24 @@
  * Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
  * 02111-1307 USA
  */
+/*
+ * This file is part of the PMIP, Proxy Mobile IPv6 for Linux.
+ *
+ * Authors: OPENAIR3 <openair_tech@eurecom.fr>
+ *
+ * Copyright 2010-2011 EURECOM (Sophia-Antipolis, FRANCE)
+ * 
+ * Proxy Mobile IPv6 (or PMIPv6, or PMIP) is a network-based mobility 
+ * management protocol standardized by IETF. It is a protocol for building 
+ * a common and access technology independent of mobile core networks, 
+ * accommodating various access technologies such as WiMAX, 3GPP, 3GPP2 
+ * and WLAN based access architectures. Proxy Mobile IPv6 is the only 
+ * network-based mobility management protocol standardized by IETF.
+ * 
+ * PMIP Proxy Mobile IPv6 for Linux has been built above MIPL free software;
+ * which it involves that it is under the same terms of GNU General Public
+ * License version 2. See MIPL terms condition if you need more details. 
+ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -58,6 +76,7 @@
 #endif
 #include "tunnelctl.h"
 #include "statistics.h"
+#include "pmip.h"
 
 static void sig_child(__attribute__ ((unused)) int unused)
 {
@@ -82,6 +101,7 @@ static void terminate(void)
 	/* got SIGINT, cleanup and exit */
 	syslog(LOG_INFO, "terminated (SIGINT)");
 	dbg("got SIGINT, exiting\n");
+	pmip_cleanup();
 	debug_close();
 	pthread_exit(NULL);
 }
@@ -167,10 +187,12 @@ static void *sigh(__attribute__ ((unused)) void *arg)
 	pthread_exit(NULL);
 }
 
-const char *entity_string[3] = {
+const char *entity_string[5] = {
 	"Correspondent Node",
 	"Mobile Node",
-	"Home Agent" };
+	"Home Agent",
+	"Mobile Access Gateway",
+	"Local Mobility Anchor" };
 
 int main(int argc, char **argv)
 {
@@ -241,15 +263,21 @@ int main(int argc, char **argv)
 		goto mh_failed;
 	if (icmp6_init() < 0)
 		goto icmp6_failed;
+	if (!(is_ha()) && !(is_mag()))
 	if (xfrm_init() < 0)
 		goto xfrm_failed;
 	cn_init();
-	if ((is_ha() || is_mn()) && tunnelctl_init() < 0)
+	if ((is_ha() || is_mn() || is_lma() || is_mag()) && tunnelctl_init() < 0)
 		goto tunnelctl_failed;
 	if (is_ha() && ha_init() < 0) 
 		goto ha_failed;
 	if (is_mn() && mn_init() < 0)
 		goto mn_failed;
+	if (is_lma() && pmip_lma_init() < 0)
+		goto pmip_failed;
+	if (is_mag() && pmip_mag_init() < 0)
+		goto pmip_failed;
+
 #ifdef ENABLE_VT
 	if (vt_start(conf.vt_hostname, conf.vt_service) < 0)
 		goto vt_start_failed;
@@ -265,6 +293,8 @@ vt_start_failed:
 #endif
 	if (is_mn())
 		mn_cleanup();
+pmip_failed:
+	pmip_cleanup();
 mn_failed:
 	if (is_ha())
 		ha_cleanup();

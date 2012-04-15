@@ -57,6 +57,47 @@ struct mip6_config {
 
 	/* CN options */
 	char DoRouteOptimizationCN;
+
+    /* PMIP global options */
+    unsigned int    RFC5213TimestampBasedApproachInUse;
+    unsigned int    RFC5213MobileNodeGeneratedTimestampInUse;
+    struct in6_addr RFC5213FixedMAGLinkLocalAddressOnAllAccessLinks;
+    struct in6_addr RFC5213FixedMAGLinkLayerAddressOnAllAccessLinks;
+
+    /* PMIP LMA options */
+    struct timespec RFC5213MinDelayBeforeBCEDelete;
+    struct timespec RFC5213MaxDelayBeforeNewBCEAssign;
+    struct timespec RFC5213TimestampValidityWindow;
+
+    /* PMIP MAG options */
+    unsigned int    RFC5213EnableMAGLocalRouting;
+    struct in6_addr AllLmaMulticastAddress;     // All-LMA Multicast Address (Eurecom' Extension for SPMIPv6).
+    struct in6_addr LmaAddress;                 // address of LMA, PMIP network side.
+    char*           LmaPmipNetworkDevice;       // PMIP LMA device, PMIP network side.
+    struct in6_addr LmaCoreNetworkAddress;      // address of LMA, core network side.
+    char*           LmaCoreNetworkDevice;       // PMIP LMA device, core network side.
+    struct in6_addr MagAddressIngress;          // ingress address of MAG.
+    struct in6_addr MagAddressEgress;           // egress address of MAG.
+    struct in6_addr Mag1AddressIngress;         // ingress address of MAG1.
+    struct in6_addr Mag1AddressEgress;          // egress address of MAG1.
+    struct in6_addr Mag2AddressIngress;         // ingress address of MAG1.
+    struct in6_addr Mag2AddressEgress;          // egress address of MAG1.
+    struct in6_addr Mag3AddressIngress;         // ingress address of MAG1.
+    struct in6_addr Mag3AddressEgress;          // egress address of MAG1.
+    char*           MagDeviceIngress;           // ingress device.
+    char*           MagDeviceEgress;            // egress device.
+    struct in6_addr OurAddress;
+    struct in6_addr HomeNetworkPrefix;          // home network address common for domain!
+    struct timespec PBULifeTime;                // Life time of Proxy Binding Update.
+    struct timespec PBALifeTime;                // Life time MR side.
+    struct timespec RetransmissionTimeOut;      // Time-out before retransmission of a message.
+    int             MaxMessageRetransmissions;  //indicates the maximum number of message retransmissions
+    char            TunnelingEnabled;
+    char            DynamicTunnelingEnabled;
+    char*           RadiusClientConfigFile;
+    char*           RadiusPassword;
+    char*           PcapSyslogAssociationGrepString;
+    char*           PcapSyslogDeAssociationGrepString;
 };
 
 struct net_iface {
@@ -75,6 +116,8 @@ extern struct mip6_config conf;
 #define MIP6_ENTITY_CN 0
 #define MIP6_ENTITY_MN 1
 #define MIP6_ENTITY_HA 2
+#define MIP6_ENTITY_MAG 3
+#define MIP6_ENTITY_LMA 4
 
 static inline int is_cn(void)
 {
@@ -89,6 +132,16 @@ static inline int is_mn(void)
 static inline int is_ha(void)
 {
 	return conf.mip6_entity == MIP6_ENTITY_HA;
+}
+
+static inline int is_mag(void)
+{
+    return conf.mip6_entity == MIP6_ENTITY_MAG;
+}
+
+static inline int is_lma(void)
+{
+    return conf.mip6_entity == MIP6_ENTITY_LMA;
 }
 
 static inline int is_if_entity_set(struct net_iface *i)
@@ -114,6 +167,18 @@ static inline int is_if_ha(struct net_iface *i)
 {
 	return (is_ha() &&
 		(!is_if_entity_set(i) || i->mip6_if_entity == MIP6_ENTITY_HA));
+}
+
+static inline int is_if_lma(struct net_iface *i)
+{
+    return (is_lma() &&
+            (!is_if_entity_set(i) || i->mip6_if_entity == MIP6_ENTITY_LMA));
+}
+
+static inline int is_if_mag(struct net_iface *i)
+{
+    return (is_mag() &&
+            (!is_if_entity_set(i) || i->mip6_if_entity == MIP6_ENTITY_MAG));
 }
 
 int conf_parse(struct mip6_config *c, int argc, char **argv);

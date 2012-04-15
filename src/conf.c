@@ -24,6 +24,24 @@
  * Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
  * 02111-1307 USA.
  */
+/*
+ * This file is part of the PMIP, Proxy Mobile IPv6 for Linux.
+ *
+ * Authors: OPENAIR3 <openair_tech@eurecom.fr>
+ *
+ * Copyright 2010-2011 EURECOM (Sophia-Antipolis, FRANCE)
+ * 
+ * Proxy Mobile IPv6 (or PMIPv6, or PMIP) is a network-based mobility 
+ * management protocol standardized by IETF. It is a protocol for building 
+ * a common and access technology independent of mobile core networks, 
+ * accommodating various access technologies such as WiMAX, 3GPP, 3GPP2 
+ * and WLAN based access architectures. Proxy Mobile IPv6 is the only 
+ * network-based mobility management protocol standardized by IETF.
+ * 
+ * PMIP Proxy Mobile IPv6 for Linux has been built above MIPL free software;
+ * which it involves that it is under the same terms of GNU General Public
+ * License version 2. See MIPL terms condition if you need more details. 
+ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -41,6 +59,7 @@
 
 #include <netinet/in.h>
 #include <netinet/ip6mh.h>
+#include <arpa/inet.h>
 #include "defpath.h"
 #include "conf.h"
 #include "debug.h"
@@ -222,10 +241,63 @@ static void conf_default(struct mip6_config *c)
 	c->MaxMobPfxAdvInterval = 86400; /* seconds */
 	c->MinMobPfxAdvInterval = 600; /* seconds */
 	c->HaMaxBindingLife = MAX_BINDING_LIFETIME;
+
+    /* PMIP global options */
+    c->RFC5213TimestampBasedApproachInUse = 1;
+    c->RFC5213MobileNodeGeneratedTimestampInUse = 1;
+    c->RFC5213FixedMAGLinkLocalAddressOnAllAccessLinks = in6addr_any;
+    c->RFC5213FixedMAGLinkLayerAddressOnAllAccessLinks = in6addr_any;
+
+    /* PMIP LMA options */
+    struct timespec lifetime1;
+    lifetime1.tv_sec = 10;
+    lifetime1.tv_nsec = 0;
+    c->RFC5213MinDelayBeforeBCEDelete         = lifetime1; // 10000 milliseconds
+    struct timespec lifetime2;
+    lifetime2.tv_sec = 1;
+    lifetime2.tv_nsec = 500000000;
+    c->RFC5213MaxDelayBeforeNewBCEAssign      = lifetime2; // 1500 milliseconds
+    struct timespec lifetime3;
+    lifetime3.tv_sec = 0;
+    lifetime3.tv_nsec = 300000000;
+    c->RFC5213TimestampValidityWindow         = lifetime3; // 300 milliseconds
+
 	INIT_LIST_HEAD(&c->nemo_ha_served_prefixes);
 
 	/* CN bindings */
 	c->DoRouteOptimizationCN = 1;
+
+    /* PMIP MAG options */
+    c->RFC5213EnableMAGLocalRouting = 0;
+    c->HomeNetworkPrefix             = in6addr_any;
+    c->MagAddressIngress             = in6addr_loopback;
+    c->MagAddressEgress              = in6addr_loopback;
+    c->MagDeviceIngress              = "";
+    c->MagDeviceEgress               = "";
+    c->LmaAddress                    = in6addr_loopback;
+    c->OurAddress                    = in6addr_loopback;
+    //Lifetime for PB entry
+    struct timespec lifetime4;
+    lifetime4.tv_sec  = 40;
+    lifetime4.tv_nsec = 0;
+    c->PBULifeTime    = lifetime4;
+    struct timespec lifetime5;
+    lifetime5.tv_sec  = 40;
+    lifetime5.tv_nsec = 0;
+    c->PBALifeTime    = lifetime5;
+    //Time for N_Retransmissions
+    struct timespec lifetime6;
+    lifetime6.tv_sec  = 1;
+    lifetime6.tv_nsec = 0;
+    c->RetransmissionTimeOut = lifetime6;
+    //Define the maximum # of message retransmissions.
+    int Max_rets = 5;
+    c->MaxMessageRetransmissions = Max_rets;
+    c->TunnelingEnabled          = 0;
+    c->DynamicTunnelingEnabled   = 0;
+    c->RadiusClientConfigFile    = "";
+    c->RadiusPassword            = "";
+
 }
 
 int conf_parse(struct mip6_config *c, int argc, char **argv)
@@ -321,4 +393,40 @@ void conf_show(struct mip6_config *c)
 	/* CN options */
 	dbg("DoRouteOptimizationCN = %s\n",
 	    CONF_BOOL_STR(c->DoRouteOptimizationCN));
+
+    /* PMIP options */
+    dbg("RFC5213TimestampBasedApproachInUse                = %s\n",CONF_BOOL_STR(c->RFC5213TimestampBasedApproachInUse));
+    dbg("RFC5213MobileNodeGeneratedTimestampInUse          = %s\n",CONF_BOOL_STR(c->RFC5213MobileNodeGeneratedTimestampInUse));
+    dbg("RFC5213FixedMAGLinkLocalAddressOnAllAccessLinks   = %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&c->RFC5213FixedMAGLinkLocalAddressOnAllAccessLinks));
+    dbg("RFC5213FixedMAGLinkLayerAddressOnAllAccessLinks   = %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&c->RFC5213FixedMAGLinkLayerAddressOnAllAccessLinks));
+
+    /* PMIP LMA options */
+    dbg("RFC5213MinDelayBeforeBCEDelete                    = %u.%9u seconds\n",c->RFC5213MinDelayBeforeBCEDelete.tv_sec,c->RFC5213MinDelayBeforeBCEDelete.tv_nsec);
+    dbg("RFC5213MaxDelayBeforeNewBCEAssign                 = %u.%9u seconds\n",c->RFC5213MaxDelayBeforeNewBCEAssign.tv_sec,c->RFC5213MaxDelayBeforeNewBCEAssign.tv_nsec);
+    dbg("RFC5213TimestampValidityWindow                    = %u.%9u seconds\n",c->RFC5213TimestampValidityWindow.tv_sec,c->RFC5213TimestampValidityWindow.tv_nsec);
+
+    /* PMIP MAG options */
+    dbg("RFC5213EnableMAGLocalRouting = %s\n", CONF_BOOL_STR(c->RFC5213EnableMAGLocalRouting));
+
+    dbg("AllLmaMulticastAddress            = %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&c->AllLmaMulticastAddress));
+    dbg("LmaAddress                        = %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&c->LmaAddress));
+    if (is_mag()) {
+        dbg("MagAddressIngress                 = %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&c->MagAddressIngress));
+        dbg("MagAddressEgress                  = %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&c->MagAddressEgress));
+        dbg("MagDeviceIngress                  = %s\n", (c->MagDeviceIngress ? c->MagDeviceIngress : "No device"));
+        dbg("MagDeviceEgress                   = %s\n", (c->MagDeviceEgress ? c->MagDeviceEgress : "No device"));
+        dbg("PBULifeTime                       = %u.%9u seconds\n",c->PBULifeTime.tv_sec,c->PBULifeTime.tv_nsec);
+        dbg("RetransmissionTimeOut             = %u.%9u seconds\n",c->RetransmissionTimeOut.tv_sec,c->RetransmissionTimeOut.tv_nsec);
+        dbg("RadiusClientConfigFile            = %s\n", (c->RadiusClientConfigFile ? c->RadiusClientConfigFile : "No Config file"));
+        dbg("RadiusPassword                    = %s\n", (c->RadiusPassword ? c->RadiusPassword : "No password"));
+        dbg("PcapSyslogAssociationGrepString   = %s\n", (c->PcapSyslogAssociationGrepString ? c->PcapSyslogAssociationGrepString : "No syslog association grep string"));
+        dbg("PcapSyslogDeAssociationGrepString = %s\n", (c->PcapSyslogDeAssociationGrepString ? c->PcapSyslogDeAssociationGrepString : "No syslog de-association grep string"));
+    }
+    dbg("OurAddress                        = %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&c->OurAddress));
+    dbg("HomeNetworkPrefix                 = %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&c->HomeNetworkPrefix));
+
+    dbg("MaxMessageRetransmissions         = %u\n", c->MaxMessageRetransmissions);
+    dbg("TunnelingEnabled                  = %s\n", CONF_BOOL_STR(c->TunnelingEnabled));
+    dbg("DynamicTunnelingEnabled           = %s\n", CONF_BOOL_STR(c->DynamicTunnelingEnabled));
+
 }
