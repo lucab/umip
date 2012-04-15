@@ -40,6 +40,7 @@
 #include "mipv6.h"
 #include "ha.h"
 #include "mn.h"
+#include "cn.h"
 #include "conf.h"
 #include "policy.h"
 #include "xfrm.h"
@@ -52,6 +53,7 @@ struct net_iface ni = {
 	.mip6_if_entity = MIP6_ENTITY_NO,
 	.mn_if_preference = POL_MN_IF_DEF_PREFERENCE,
 	.is_tunnel = 0,
+	.link_up_delay = { .tv_sec = 0, .tv_nsec = 0 },
 };
 	
 struct home_addr_info hai = {
@@ -74,6 +76,7 @@ int mv_prefixes(struct list_head *list)
 }
 
 struct policy_bind_acl_entry *bae = NULL;
+struct cn_binding_pol_entry *cnbpol = NULL;
 
 struct ipsec_policy_set {
 	struct in6_addr ha;
@@ -91,7 +94,7 @@ extern char *incl_file; /* If not NULL, name of included file being parsed.
 
 static void yyerror(char *s) {
 	fprintf(stderr, "Error in configuration file %s ",
-		incl_file ? incl_file : conf.config_file);
+		incl_file ? incl_file : conf_parsed->config_file);
 	fprintf(stderr, "at line %d: %s at '%s'\n", lineno, s, yytext);
 }
 
@@ -100,7 +103,7 @@ static void uerror(const char *fmt, ...) {
 	va_list args;
 
 	fprintf(stderr, "Error in configuration file %s ",
-		incl_file ? incl_file : conf.config_file);
+		incl_file ? incl_file : conf_parsed->config_file);
 	va_start(args, fmt);
 	vsprintf(s, fmt, args);
 	fprintf(stderr, "at line %d: %s\n", lineno, s);
@@ -134,6 +137,8 @@ static void uerror(const char *fmt, ...) {
 %token		HOMEAGENTADDRESS
 %token		INITIALBINDACKTIMEOUTFIRSTREG
 %token		INITIALBINDACKTIMEOUTREREG
+%token		INITIALSOLICITTIMER
+%token		INTERFACEINITIALINITDELAY
 %token		LINKNAME
 %token		HAMAXBINDINGLIFE
 %token		MNMAXHABINDINGLIFE
@@ -156,6 +161,7 @@ static void uerror(const char *fmt, ...) {
 %token		BLOCK
 %token		USEMNHAIPSEC
 %token		KEYMNGMOBCAPABILITY
+%token		TUNNELPAYLOADFORCESANEGO
 %token		HOMEREGBINDING
 %token		MH
 %token		MOBPFXDISC
@@ -181,16 +187,19 @@ static void uerror(const char *fmt, ...) {
 %token		IFTYPE
 %token		MNIFPREFERENCE
 %token		ISTUNNEL
+%token		LINKUPDELAY
 %token		MNUSEALLINTERFACES
 %token		MNROUTERPROBES
 %token		MNROUTERPROBETIMEOUT
 %token		MNDISCARDHAPARAMPROB
 %token		OPTIMISTICHANDOFF
+%token		NOHOMERETURN
 %token		HOMEPREFIX
 %token		HAACCEPTMOBRTR
 %token		ISMOBRTR
 %token		HASERVEDPREFIX
 %token		MOBRTRUSEEXPLICITMODE
+%token          CNBINDINGPOLICYSET
 
 %token		INV_TOKEN
 
@@ -215,48 +224,48 @@ grammar		: topdef
 
 topdef		: MIP6ENTITY mip6entity ';'
 		{
-			conf.mip6_entity = $2;
+			conf_parsed->mip6_entity = $2;
 		}
 		| DEBUGLEVEL NUMBER ';'
 		{
-			conf.debug_level = $2;
+			conf_parsed->debug_level = $2;
 		}
 		| DEBUGLOGFILE QSTRING ';'
 		{
-			conf.debug_log_file = $2;
+			conf_parsed->debug_log_file = $2;
 		}
 		| NONVOLATILEBINDINGCACHE BOOL ';'
 		{
-			conf.NonVolatileBindingCache = $2;
+			conf_parsed->NonVolatileBindingCache = $2;
 		}
 		| INTERFACE ifacedef
 		| SENDMOBPFXSOLS BOOL ';'
 		{
-			conf.SendMobPfxSols = $2;
+			conf_parsed->SendMobPfxSols = $2;
 		}
 		| SENDUNSOLMOBPFXADVS BOOL ';'
 		{
-			conf.SendUnsolMobPfxAdvs = $2;
+			conf_parsed->SendUnsolMobPfxAdvs = $2;
 		}
 		| SENDMOBPFXADVS BOOL ';'
 		{
-			conf.SendMobPfxAdvs = $2;
+			conf_parsed->SendMobPfxAdvs = $2;
 		}
 		| MAXMOBPFXADVINTERVAL NUMBER ';'
 		{
-			conf.MaxMobPfxAdvInterval = $2;
+			conf_parsed->MaxMobPfxAdvInterval = $2;
 		}
 		| MINMOBPFXADVINTERVAL NUMBER ';'
 		{
-			conf.MinMobPfxAdvInterval = $2;
+			conf_parsed->MinMobPfxAdvInterval = $2;
 		}
 		| DOROUTEOPTIMIZATIONCN BOOL ';'
 		{
-			conf.DoRouteOptimizationCN = $2;
+			conf_parsed->DoRouteOptimizationCN = $2;
 		}
 		| DOROUTEOPTIMIZATIONMN BOOL ';'
 		{
-			conf.DoRouteOptimizationMN = $2;
+			conf_parsed->DoRouteOptimizationMN = $2;
 		}
 		| HAMAXBINDINGLIFE NUMBER ';'
 		{
@@ -265,7 +274,7 @@ topdef		: MIP6ENTITY mip6entity ';'
 				       MAX_BINDING_LIFETIME);
 				return -1;
 			}
-			conf.HaMaxBindingLife = $2;
+			conf_parsed->HaMaxBindingLife = $2;
 		}
 		| MNMAXHABINDINGLIFE NUMBER ';'
 		{
@@ -274,7 +283,7 @@ topdef		: MIP6ENTITY mip6entity ';'
 				       MAX_BINDING_LIFETIME);
 				return -1;
 			}
-			conf.MnMaxHaBindingLife = $2;
+			conf_parsed->MnMaxHaBindingLife = $2;
 		}
 		| MNMAXCNBINDINGLIFE NUMBER ';'
 		{
@@ -283,43 +292,55 @@ topdef		: MIP6ENTITY mip6entity ';'
 				       MAX_RR_BINDING_LIFETIME);
 				return -1;
 			}
-			conf.MnMaxCnBindingLife = $2;
+			conf_parsed->MnMaxCnBindingLife = $2;
 		}
 		| INITIALBINDACKTIMEOUTFIRSTREG DECIMAL ';'
 		{
-			tssetdsec(conf.InitialBindackTimeoutFirstReg_ts, $2);
+			tssetdsec(conf_parsed->InitialBindackTimeoutFirstReg_ts, $2);
 		}
 		| INITIALBINDACKTIMEOUTREREG DECIMAL ';'
 		{
-			tssetdsec(conf.InitialBindackTimeoutReReg_ts, $2);
+			tssetdsec(conf_parsed->InitialBindackTimeoutReReg_ts, $2);
+		}
+		| INITIALSOLICITTIMER DECIMAL ';'
+		{
+			tssetdsec(conf_parsed->InitialSolicitTimer_ts, $2);
+		}
+		| INTERFACEINITIALINITDELAY DECIMAL ';'
+		{
+			tssetdsec(conf_parsed->InterfaceInitialInitDelay_ts, $2);
 		}
 		| MNHOMELINK linksub
 		| USEMNHAIPSEC BOOL ';'
 		{
-			conf.UseMnHaIPsec = $2;
+			conf_parsed->UseMnHaIPsec = $2;
 		}
 		| KEYMNGMOBCAPABILITY BOOL  ';'
 		{
-			conf.KeyMngMobCapability = $2;
+			conf_parsed->KeyMngMobCapability = $2;
+		}
+		| TUNNELPAYLOADFORCESANEGO BOOL  ';'
+		{
+			conf_parsed->TunnelPayloadForceSANego = $2;
 		}
 		| USEMOVEMENTMODULE movemodule ';'
 		| USEPOLICYMODULE policymodule ';'
 		| DEFAULTBINDINGACLPOLICY bindaclpolval ';'
 		{
-			conf.DefaultBindingAclPolicy = $2;
+			conf_parsed->DefaultBindingAclPolicy = $2;
 		}
 		| HAACCEPTMOBRTR BOOL ';'
 		{
-			conf.HaAcceptMobRtr = $2;
+			conf_parsed->HaAcceptMobRtr = $2;
 		}
 		| HASERVEDPREFIX prefixlistentry ';'
 		{
 			list_splice(&prefixes,
-				    conf.nemo_ha_served_prefixes.prev);
+				    conf_parsed->nemo_ha_served_prefixes.prev);
 		}
 		| MOBRTRUSEEXPLICITMODE BOOL ';'
 		{
-			conf.MobRtrUseExplicitMode = $2;
+			conf_parsed->MobRtrUseExplicitMode = $2;
 		}
 		| BINDINGACLPOLICY bindaclpolicy ';' 
 		{
@@ -327,30 +348,35 @@ topdef		: MIP6ENTITY mip6entity ';'
 		}
 		| USECNBUACK BOOL ';' 
 		{
-			conf.CnBuAck = $2 ? IP6_MH_BU_ACK : 0;
+			conf_parsed->CnBuAck = $2 ? IP6_MH_BU_ACK : 0;
 		}
 		| IPSECPOLICYSET '{' ipsecpolicyset '}'
 		| MNUSEALLINTERFACES BOOL ';' 
 		{
-			conf.MnUseAllInterfaces = $2 ? POL_MN_IF_DEF_PREFERENCE : 0;
+			conf_parsed->MnUseAllInterfaces = $2 ? POL_MN_IF_DEF_PREFERENCE : 0;
 		}
 		| MNROUTERPROBES NUMBER ';' 
 		{
-			conf.MnRouterProbes = $2;
+			conf_parsed->MnRouterProbes = $2;
 		}
 		| MNROUTERPROBETIMEOUT DECIMAL ';' 
 		{
 			if ($2 > 0)
-				tssetdsec(conf.MnRouterProbeTimeout_ts, $2);
+				tssetdsec(conf_parsed->MnRouterProbeTimeout_ts, $2);
 		}
 		| MNDISCARDHAPARAMPROB BOOL ';' 
 		{
-			conf.MnDiscardHaParamProb = $2;
+			conf_parsed->MnDiscardHaParamProb = $2;
 		}
 		| OPTIMISTICHANDOFF BOOL ';' 
 		{
-			conf.OptimisticHandoff = $2;
+			conf_parsed->OptimisticHandoff = $2;
 		}
+		| NOHOMERETURN BOOL ';'
+		{
+			conf.NoHomeReturn = $2;
+		}
+                | CNBINDINGPOLICYSET  '{' cnbindingpoldefs '}'
 		;
 
 mip6entity	: MIP6CN { $$ = MIP6_ENTITY_CN;	}
@@ -391,7 +417,7 @@ ifacedef	: QSTRING ifacesub
 				return -1;
 			}
 			memcpy(nni, &ni, sizeof(struct net_iface));
-			list_add_tail(&nni->list, &conf.net_ifaces);
+			list_add_tail(&nni->list, &conf_parsed->net_ifaces);
 			if (is_if_ha(nni))
 				homeagent_if_init(nni->ifindex);
 
@@ -427,6 +453,10 @@ ifaceopt	: IFTYPE mip6entity ';'
 		| ISTUNNEL BOOL ';'
 		{
 			ni.is_tunnel = $2;
+		}
+		| LINKUPDELAY NUMBER ';'
+		{
+			tssetmsec(ni.link_up_delay, $2);
 		}
 		;
 
@@ -470,7 +500,7 @@ linksub		: QSTRING '{' linkdefs '}'
 			list_splice(&hai.ro_policies, &nhai->ro_policies);
 			list_splice(&hai.mob_net_prefixes,
 				    &nhai->mob_net_prefixes);
-			list_add_tail(&nhai->list, &conf.home_addrs);
+			list_add_tail(&nhai->list, &conf_parsed->home_addrs);
 
 			memset(&hai, 0, sizeof(struct home_addr_info));
 			INIT_LIST_HEAD(&hai.ro_policies);
@@ -636,7 +666,7 @@ ipsecpolicydef	: ipsectype ipsecprotos ipsecreqid xfrmaction ';'
 					       NIP6ADDR(&e->mn_addr));
 					return -1;
 				}
-				list_add_tail(&e->list, &conf.ipsec_policies);
+				list_add_tail(&e->list, &conf_parsed->ipsec_policies);
 			}
 		}
 		;
@@ -700,19 +730,38 @@ mnropolicyaddr	: { $$ = in6addr_any; }
 dorouteopt	: BOOL { $$ = $1; }
 		;
 
+cnbindingpoldefs: cnbindingpoldef
+                | cnbindingpoldefs cnbindingpoldef
+                ;
+
+cnbindingpoldef : ADDR mnropolicyaddr BOOL ';'
+                {
+			cnbpol = malloc(sizeof(struct cn_binding_pol_entry));
+			if (cnbpol == NULL) {
+				uerror("out of memory");
+				return -1;
+			}
+			memset(cnbpol, 0, sizeof(struct cn_binding_pol_entry));
+			cnbpol->remote_hoa = $1;
+			cnbpol->local_addr = $2;
+			cnbpol->bind_policy = $3;
+			list_add_tail(&cnbpol->list,
+				      &conf_parsed->cn_binding_pol);
+                }
+                ;
 movemodule	: INTERNAL
 		{
-			conf.MoveModulePath = NULL;
+			conf_parsed->MoveModulePath = NULL;
 		}
 		| QSTRING
 		{
-			conf.MoveModulePath = NULL;
+			conf_parsed->MoveModulePath = NULL;
 		}
 		;
 
 policymodule	: QSTRING
 		{
-			if (pmgr_init($1, &conf.pmgr) < 0) {
+			if (pmgr_init($1, &conf_parsed->pmgr) < 0) {
 				uerror("error loading shared object %s", $1);
 				return -1;
 			}
@@ -742,7 +791,7 @@ bindaclpolicy	: ADDR prefixlistsub bindaclpolval
 			INIT_LIST_HEAD(&bae->mob_net_prefixes);
 			bae->mnp_count = mv_prefixes(&bae->mob_net_prefixes);
 			bae->bind_policy = $3;
-			list_add_tail(&bae->list, &conf.bind_acl);
+			list_add_tail(&bae->list, &conf_parsed->bind_acl);
 		}
 		;
 

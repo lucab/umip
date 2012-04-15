@@ -238,6 +238,8 @@ HomeAddress			{ return HOMEADDRESS; }
 HomeAgentAddress		{ return HOMEAGENTADDRESS; }
 InitialBindackTimeoutFirstReg	{ return INITIALBINDACKTIMEOUTFIRSTREG; }
 InitialBindackTimeoutReReg	{ return INITIALBINDACKTIMEOUTREREG; }
+InitialSolicitTimer		{ return INITIALSOLICITTIMER; }
+InterfaceInitialInitDelay	{ return INTERFACEINITIALINITDELAY; }
 LinkName			{ return LINKNAME; }
 HaMaxBindingLife		{ return HAMAXBINDINGLIFE; }
 MnMaxHaBindingLife		{ return MNMAXHABINDINGLIFE; }
@@ -260,6 +262,7 @@ UseAH				{ return USEAH; }
 UseIPComp			{ return USEIPCOMP; }
 UseMnHaIPsec			{ return USEMNHAIPSEC; }
 KeyMngMobCapability		{ return KEYMNGMOBCAPABILITY; }
+TunnelPayloadForceSANego	{ return TUNNELPAYLOADFORCESANEGO; }
 HomeRegBinding			{ return HOMEREGBINDING; }
 Mh				{ return MH; }
 MobPfxDisc			{ return MOBPFXDISC; }
@@ -278,16 +281,19 @@ IfName				{ return IFNAME; }
 IfType				{ return IFTYPE; }
 MnIfPreference			{ return MNIFPREFERENCE; }
 Tunnel                          { return ISTUNNEL; }
+LinkUpDelay                     { return LINKUPDELAY; }
 MnUseAllInterfaces     		{ return MNUSEALLINTERFACES; }
 MnRouterProbes			{ return MNROUTERPROBES; }
 MnRouterProbeTimeout		{ return MNROUTERPROBETIMEOUT; }
 MnDiscardHaParamProb		{ return MNDISCARDHAPARAMPROB; }
 OptimisticHandoff		{ return OPTIMISTICHANDOFF; }
+NoHomeReturn                    { return NOHOMERETURN; }
 HaAcceptMobRtr   		{ return HAACCEPTMOBRTR; }
 IsMobRtr       			{ return ISMOBRTR; }
 HaServedPrefix       	       	{ return HASERVEDPREFIX; }
 HomePrefix     			{ return HOMEPREFIX; }
 MobRtrUseExplicitMode    	{ return MOBRTRUSEEXPLICITMODE; }
+CnBindingPolicySet              { return CNBINDINGPOLICYSET; }
 internal			{ return INTERNAL; }
 
 {addr}		{

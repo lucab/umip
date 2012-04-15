@@ -102,6 +102,7 @@ struct md_inet6_iface {
 	int32_t app_solicit;
 	struct timespec reachable;
 	struct timespec retransmit;
+	struct timespec link_up_delay;
 	int router_solicits;
 	struct in6_addr lladdr;
 	unsigned int iface_flags;
@@ -132,6 +133,7 @@ enum {
 	ME_COA_EXPIRED,
 	ME_COA_LFT_DEC,
 	ME_COA_LFT_INC,
+	ME_INIT,
 };
 
 

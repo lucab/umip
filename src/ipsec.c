@@ -438,7 +438,7 @@ int ipsec_policy_entry_check(const struct in6_addr *haaddr,
 	struct list_head *lp;
 	int ret = 0;
 
-	list_for_each(lp, &conf.ipsec_policies) {
+	list_for_each(lp, &conf_parsed->ipsec_policies) {
 		struct ipsec_policy_entry *e;
 
 		e = list_entry(lp, struct ipsec_policy_entry, list);
@@ -1395,6 +1395,67 @@ static int _mn_tnl_pol_mod(const struct in6_addr *haaddr,
 	return err;
 }
 
+/* Force negotiation of tunnel mode SA protecting data traffic between
+ * the MN and its HA */
+int _mn_tnl_force_acq(const struct in6_addr *haaddr,
+		      const struct in6_addr *hoa,
+		      struct ipsec_policy_entry *e,
+		      void *arg)
+{
+	struct bulentry *bule = (struct bulentry *)arg;
+	struct xfrm_userpolicy_info sp;
+	struct xfrm_user_tmpl tmpl;
+	u_int16_t ipsec_proto;
+	int ifindex, err = 0;
+
+	assert(haaddr);
+	assert(hoa);
+	assert(e);
+	assert(arg);
+
+	/* XXX At some point we may need to extend it to other
+	 * protected tunnel modes --arno */
+	switch (e->type) {
+	case IPSEC_POLICY_TYPE_TUNNELPAYLOAD:
+		break;
+	default:
+		goto end;
+	}
+
+	/* XXX Limitation: Single IPsec proto can only be applied */
+	if (ipsec_use_esp(e))
+		ipsec_proto = IPPROTO_ESP;
+	else if (ipsec_use_ah(e))
+		ipsec_proto = IPPROTO_AH;
+	else if (ipsec_use_ipcomp(e))
+		ipsec_proto = IPPROTO_COMP;
+	else {
+		dbg("invalid ipsec proto\n");
+		goto end;
+	}
+
+	ifindex = bule->home->if_tunnel;
+
+	_set_sp(&sp, e, XFRM_POLICY_OUT, &in6addr_any, 0, hoa, 0,
+		ifindex, MIP6_ENTITY_MN);
+	_set_tmpl(&tmpl, AF_INET6, ipsec_proto, XFRM_MODE_TUNNEL,
+		  haaddr, &bule->coa, e->reqid_toha);
+
+	if (xfrm_ipsec_tnl_state_acquire(&sp, &tmpl) < 0) {
+		dbg("Sending userland ACQUIRE failed.\n");
+		err = -1;
+	}
+
+ end:
+	return err;
+}
+
+int mn_ipsec_tnl_force_acquire(const struct in6_addr *haaddr,
+			 const struct in6_addr *hoa, void *arg)
+{
+	return ipsec_policy_apply(haaddr, hoa, _mn_tnl_force_acq, arg);
+}
+
 /*
  *   Add SP entry (for MN)
  *
@@ -1433,4 +1494,57 @@ int mn_ipsec_tnl_pol_del(const struct in6_addr *haaddr,
 			 const struct in6_addr *hoa, void *arg)
 {
 	return ipsec_policy_apply(haaddr, hoa, _mn_tnl_pol_del, arg);
+}
+
+/* callback for mn_ipsec_larval_sa(), see  below */
+static int _check_larval_sa(__attribute__ ((unused)) const struct sockaddr_nl *who,
+			    struct nlmsghdr *n, void *arg)
+{
+	struct xfrm_usersa_info *sainfo = NULL;
+	struct rtattr * tb[XFRMA_MAX+1];
+	struct rtattr * rta;
+	int *found = (int *)arg;
+	int len;
+
+	if (n->nlmsg_type != XFRM_MSG_NEWSA)
+		return 0;
+
+	sainfo = NLMSG_DATA(n);
+
+	/* We consider only IPsec SA (AH or ESP) */
+	if (!(sainfo->id.proto == IPPROTO_ESP ||
+	      sainfo->id.proto == IPPROTO_AH))
+		return 0;
+
+	len = n->nlmsg_len - NLMSG_SPACE(sizeof(*sainfo));
+	rta = (struct rtattr*)(((char*)(sainfo))+NLMSG_ALIGN(sizeof(*sainfo)));
+	parse_rtattr(tb, XFRMA_MAX, rta, len);
+
+	/* Bad hack: unlike PF_KEY, netlink interface to XFRM does not provide
+	 * a way to access the state of a SA, i.e. if it is valid, if an ACQUIRE
+	 * is in progress, ... We simply consider it is in progress if it is
+	 * there w/o authentication and encryption info */
+	if (tb[XFRMA_ALG_AUTH] == NULL && tb[XFRMA_ALG_CRYPT] == NULL)
+		*found += 1;
+
+	return 0;
+}
+
+/* Return the number of IPsec SA negotiations in progress on the system. This
+ * is used during a movement decision (soft one) to avoid breaking the ongoing
+ * negotiations. A positive value is returned on success, -1 is returned on
+ * error, 0 if no IPsec SA negotiation is in progress.
+ *
+ * XXX This is an initial version: we should only do that for the SA we
+ *     expect to be negotiated (the ones using the CoA we may change)
+ *
+ * --arno */
+int mn_ipsec_larval_sa(void) {
+	int found = 0;
+
+	if (rtnl_iterate(NETLINK_XFRM, XFRM_MSG_GETSA,
+			 _check_larval_sa, (void *)&found) < 0)
+		return -1;
+
+	return found;
 }

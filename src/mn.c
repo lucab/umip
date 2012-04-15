@@ -896,7 +896,11 @@ static void mn_send_home_bu(struct home_addr_info *hai)
 		bule->do_send_bu = 1;
 		mn_send_bu_msg(bule);
 		bul_update_timer(bule);
-		if (conf.OptimisticHandoff)
+
+		/* OptimisticHandoff behavior is not enforced when coming
+		 * back home, for security reasons. */
+		if ((type_movement != MIP6_TYPE_MOVEMENT_FL2HL) &&
+		    conf.OptimisticHandoff)
 			post_ba_bul_update(bule);
 	}
 	/* Before bul_iterate, tunnel modification should be done. */
@@ -1031,222 +1035,270 @@ static int mn_chk_bauth(struct ip6_mh_binding_ack *ba, ssize_t len,
 	return -1;
 }
 
-static void mn_recv_ba(const struct ip6_mh *mh, ssize_t len,
-		       const struct in6_addr_bundle *in,
-		       __attribute__ ((unused)) int iif)
+static void mn_move_positive_non_home(void);
+
+static void mn_process_ha_ba(struct ip6_mh_binding_ack *ba,
+			     struct mh_options *mh_opts, struct bulentry *bule)
 {
-	struct ip6_mh_binding_ack *ba;
-	struct mh_options mh_opts;
-	struct bulentry *bule;
 	struct timespec now, ba_lifetime, br_adv, mps_delay;
-	uint16_t seqno;
+	struct home_addr_info *hai = bule->home;
+	struct ip6_mh_opt_refresh_advice *bra;
+	uint16_t seqno = ntohs(ba->ip6mhba_seqno);
 
-	TRACE;
-
-	statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_BA);
-
-	if (len < 0 || (size_t)len < sizeof(struct ip6_mh_binding_ack) ||
-	    mh_opt_parse(mh, len,
-			 sizeof(struct ip6_mh_binding_ack), &mh_opts) < 0)
-	    return;
-
-	ba = (struct ip6_mh_binding_ack *)mh;
-
-	pthread_rwlock_wrlock(&mn_lock);
-	bule = bul_get(NULL, in->dst, in->src);
-	if (!bule || bule->type != BUL_ENTRY) {
-		MDBG("Got BA without corresponding BUL entry "
-		     "from %x:%x:%x:%x:%x:%x:%x:%x "
-		     "to home address %x:%x:%x:%x:%x:%x:%x:%x "
-		     "with coa %x:%x:%x:%x:%x:%x:%x:%x\n",
-		     NIP6ADDR(in->src),  
-		     NIP6ADDR(in->dst),
-		     NIP6ADDR(in->local_coa != NULL ? 
-			      in->local_coa : &in6addr_any));
-		pthread_rwlock_unlock(&mn_lock);
+	if ((bule->seq != seqno) &&
+	    (ba->ip6mhba_status != IP6_MH_BAS_SEQNO_BAD)) {
+		/* In this case, ignore BA and resend BU. */
+		MDBG("Got BA with incorrect sequence number %d, "
+		     "the one sent in BU was %d\n", seqno, bule->seq);
 		return;
 	}
-	dbg("Got BA from %x:%x:%x:%x:%x:%x:%x:%x "
-	    "to home address %x:%x:%x:%x:%x:%x:%x:%x "
-	    "with coa %x:%x:%x:%x:%x:%x:%x:%x and status %d\n",
-	    NIP6ADDR(in->src), NIP6ADDR(in->dst),
-	    NIP6ADDR(in->local_coa != NULL ? in->local_coa : &in6addr_any),
-	    ba->ip6mhba_status);
-	dbg("Dumping corresponding BULE\n");
-	dbg_func(bule, dump_bule);
-	/* First check authenticator */
-	if (!(bule->flags & IP6_MH_BU_HOME) &&
-	    mn_chk_bauth(ba, len, &mh_opts, bule)) {
-		pthread_rwlock_unlock(&mn_lock);
-		return;
-	}
-	/* Then sequence number */
-	seqno = ntohs(ba->ip6mhba_seqno);
-	if (bule->seq != seqno) {
-		if (ba->ip6mhba_status != IP6_MH_BAS_SEQNO_BAD) {
-			/*
-			 * In this case, ignore BA and resends BU.
-			 */
-			MDBG("Got BA with incorrect sequence number %d, " 
-			     "the one sent in BU was %d\n", seqno, bule->seq);
-			pthread_rwlock_unlock(&mn_lock);
-			return;
-		}
-	}
+
 	bule->do_send_bu = 0;
 	bule->consecutive_resends = 0;
 	clock_gettime(CLOCK_REALTIME, &now);
 	if (ba->ip6mhba_status >= IP6_MH_BAS_UNSPECIFIED) {
+		char err_str[MAX_BA_STATUS_STR_LEN];
+
 		if (ba->ip6mhba_status == IP6_MH_BAS_SEQNO_BAD) {
-			MDBG("out of sync seq nr\n");
+			mh_ba_status_to_str(ba->ip6mhba_status, err_str);
+			syslog(LOG_ERR, "Received BA with error status %s. "
+			       "Resending BU w/ updated seqno\n", err_str);
 			clock_gettime(CLOCK_REALTIME, &bule->lastsent);
 			bule->seq = seqno + 1;
-			if (bule->flags & IP6_MH_BU_HOME)
-				mn_get_home_lifetime(bule->home,
-						     &bule->lifetime, 0);
-			else
-				mn_get_ro_lifetime(bule->home,
-						   &bule->lifetime, 0);
+			mn_get_home_lifetime(bule->home, &bule->lifetime, 0);
 			bule->callback = bu_resend;
 			pre_bu_bul_update(bule);
 			mn_send_bu_msg(bule);
 			bule->delay = conf.InitialBindackTimeoutReReg_ts;
 			bul_update_timer(bule);
-			if (bule->flags & IP6_MH_BU_HOME &&
-			    conf.OptimisticHandoff) {
-				post_ba_bul_update(bule);	
-			}
-			pthread_rwlock_unlock(&mn_lock);
+
+			/* OptimisticHandoff behavior is not enforced when coming
+			 * back home, for security reasons. */
+			if ((bule->lifetime.tv_sec != 0) && conf.OptimisticHandoff)
+				post_ba_bul_update(bule);
 			return;
 		}
-		if (bule->flags & IP6_MH_BU_HOME) { 
-			struct home_addr_info *hai = bule->home;
-			char err_str[MAX_BA_STATUS_STR_LEN];
 
-			if (hai->at_home) {
-				bul_delete(bule);
-				mn_do_dad(hai, 1);
-				pthread_rwlock_unlock(&mn_lock);
-				return;
-			}
-
-			mh_ba_status_to_str(ba->ip6mhba_status, err_str);
-			syslog(LOG_ERR, "Received BA with error status %s. "
-			       "Unable to register with HA. Deleting entry\n",
-			       err_str);
-
-			if (hai->use_dhaad) {
-				bule_invalidate(bule, &now, 0);
-				mn_change_ha(hai);
-			} else {
-				bule_invalidate(bule, &now, 1);
-			}
-			pthread_rwlock_unlock(&mn_lock);
+		if (hai->at_home) {
+			bul_delete(bule);
+			mn_do_dad(hai, 1);
 			return;
-		} else {
-			/* Don't resend BUs to this CN */
+		}
+
+		mh_ba_status_to_str(ba->ip6mhba_status, err_str);
+		syslog(LOG_ERR, "Received BA with error status %s. Unable "
+		       "to register with HA. Deleting entry\n", err_str);
+
+		if (hai->use_dhaad) {
+			bule_invalidate(bule, &now, 0);
+			mn_change_ha(hai);
+		} else
 			bule_invalidate(bule, &now, 1);
-			pthread_rwlock_unlock(&mn_lock);
-			return;
-		}
-	}
-	if (bule->wait_ack) 
-		bule->wait_ack = 0;
-	else {
-		MDBG("unexpected BA, ignoring\n");
-		pthread_rwlock_unlock(&mn_lock);
+
 		return;
 	}
+
+	if (!bule->wait_ack) {
+		MDBG("Ignoring unexpected BA.\n");
+		return;
+	}
+	bule->wait_ack = 0;
+
 	tssetsec(ba_lifetime, ntohs(ba->ip6mhba_lifetime) << 2);
 	br_adv = ba_lifetime;
 	tsadd(bule->lastsent, ba_lifetime, bule->hard_expire);
-	if (!(bule->flags & IP6_MH_BU_HOME) || !conf.OptimisticHandoff)
+
+	/* post_ba_bul_update() need to be called when receiving
+	 * de-registration BA even if OptimisticHandoff is enabled.
+	 * For security reasons, OptimistifHandoff behavior is not
+	 * enforced when comming back home. Also note that this
+	 * optimistic behavior does not make much sense from a
+	 * performance standpoint when coming back home: RTT is 0.
+	 * --arno. */
+	if (!conf.OptimisticHandoff || !tsisset(ba_lifetime))
 		post_ba_bul_update(bule);
-	if (bule->flags & IP6_MH_BU_HOME) {
-		struct home_addr_info *hai = bule->home;
-		struct ip6_mh_opt_refresh_advice *bra;
 
-		if (bule->flags & IP6_MH_BU_MR &&
-		    !(ba->ip6mhba_flags & IP6_MH_BA_MR)) {
-			if (hai->use_dhaad) {
-				mn_change_ha(hai);
-			} else {
-				int one = 1;
-				bul_iterate(&hai->bul, mn_dereg, &one);
-			}
-			pthread_rwlock_unlock(&mn_lock);
-			return;
+	if (bule->flags & IP6_MH_BU_MR &&
+	    !(ba->ip6mhba_flags & IP6_MH_BA_MR)) {
+		if (hai->use_dhaad)
+			mn_change_ha(hai);
+		else {
+			int one = 1;
+			bul_iterate(&hai->bul, mn_dereg, &one);
 		}
-		if (!tsisset(ba_lifetime)) {
-			int type = FLUSH_FAILED;
-			mn_dereg_home(hai);
-			bul_delete(bule);
-			/* If BA was for home registration & succesful 
-			 *  Send RO BUs to CNs for this home address.
-			 */
-			bul_iterate(&hai->bul, _bul_flush, &type);
-			bul_iterate(&hai->bul, mn_rr_start_handoff, NULL);
-			pthread_rwlock_unlock(&mn_lock);
-			mn_movement_event(NULL);
-			mn_block_rule_del(hai);
-			return;
-		}
-		/* If status of BA is 0 or 1, Binding Update is accepted. */
-		if (ba->ip6mhba_status == IP6_MH_BAS_PRFX_DISCOV){
-			mpd_trigger_mps(&bule->hoa, &bule->peer_addr);
-		}else if( hai->home_reg_status == HOME_REG_UNCERTAIN && tsisset(ba_lifetime)){
-			if(tsisset(hai->hoa.timestamp)){
-				mps_delay = tsmin(hai->hoa.valid_time, ba_lifetime);
-				mpd_schedule_first_mps(&bule->hoa, &bule->peer_addr, &mps_delay);
-			}else
-				mpd_trigger_mps(&bule->hoa, &bule->peer_addr);
-		}
-
-		/* If BA was for home registration & succesful 
-		 *  Send RO BUs to CNs for this home address.
-		 */
-		hai->home_reg_status = HOME_REG_VALID;
-		bul_iterate(&hai->bul, mn_rr_start_handoff, NULL);
-
-		/* IP6_MH_BA_KEYM  */
-		if (bule->flags & IP6_MH_BU_KEYM) {
-			if (ba->ip6mhba_flags & IP6_MH_BA_KEYM) {
-				/* Inform IKE  to send readdress msg */
-
-			} else {
-				/* Inform IKE to renegotiate SAs */
-
-				/* Remove the flag from this bule */
-				bule->flags &= ~IP6_MH_BU_KEYM;
-
-				/* Issue a warning */
-				syslog(LOG_ERR,
-			         "HA does not support IKE session surviving, "
-			         "traffic may be interrupted after movements.\n"
-				 );
-			}
-		}
-		bra = mh_opt(&ba->ip6mhba_hdr, &mh_opts, IP6_MHOPT_BREFRESH);
-		if (bra)
-			tssetsec(br_adv, ntohs(bra->ip6mora_interval) << 2);
+		return;
 	}
+	if (!tsisset(ba_lifetime)) {
+		int type = FLUSH_FAILED;
+		mn_dereg_home(hai);
+		dbg("Deleting bul entry\n");
+		bul_delete(bule);
+		/* If BA was for home registration & succesful,
+		 * send RO BUs to CNs for this home address. */
+		bul_iterate(&hai->bul, _bul_flush, &type);
+		bul_iterate(&hai->bul, mn_rr_start_handoff, NULL);
+		mn_move_positive_non_home();
+		mn_block_rule_del(hai);
+		return;
+	}
+
+	/* If status of BA is 0 or 1, Binding Update is accepted. */
+	if (ba->ip6mhba_status == IP6_MH_BAS_PRFX_DISCOV){
+		mpd_trigger_mps(&bule->hoa, &bule->peer_addr);
+	} else if (hai->home_reg_status == HOME_REG_UNCERTAIN) {
+		if (tsisset(hai->hoa.timestamp)){
+			mps_delay = tsmin(hai->hoa.valid_time, ba_lifetime);
+			mpd_schedule_first_mps(&bule->hoa, &bule->peer_addr,
+					       &mps_delay);
+		} else
+			mpd_trigger_mps(&bule->hoa, &bule->peer_addr);
+	}
+
+	/* If this is our first registration (HOME_REG_UNCERTAIN), now that
+	 * our BU has been accepted by the HA, ask for IKE negotiation of
+	 * IPsec SA protecting tunneled payload if requested by user. */
+	if (hai->home_reg_status == HOME_REG_UNCERTAIN && conf.UseMnHaIPsec &&
+	    conf.KeyMngMobCapability && conf.TunnelPayloadForceSANego)
+		mn_ipsec_tnl_force_acquire(&bule->home->ha_addr,
+					   &bule->hoa, bule);
+
+	hai->home_reg_status = HOME_REG_VALID;
+
+	/* If BA was for home registration & succesful,
+	 * send RO BUs to CNs for this home address. */
+	bul_iterate(&hai->bul, mn_rr_start_handoff, NULL);
+
+	/* IP6_MH_BA_KEYM  */
+	if (bule->flags & IP6_MH_BU_KEYM) {
+		if (ba->ip6mhba_flags & IP6_MH_BA_KEYM) {
+			/* Inform IKE  to send readdress msg */
+
+		} else {
+			/* Inform IKE to renegotiate SAs */
+
+			/* Remove the flag from this bule */
+			bule->flags &= ~IP6_MH_BU_KEYM;
+
+			/* Issue a warning */
+			syslog(LOG_ERR,
+		         "HA does not support IKE session surviving, "
+		         "traffic may be interrupted after movements.\n"
+			 );
+		}
+	}
+
+	bra = mh_opt(&ba->ip6mhba_hdr, mh_opts, IP6_MHOPT_BREFRESH);
+	if (bra)
+		tssetsec(br_adv, ntohs(bra->ip6mora_interval) << 2);
+
+	set_bule_lifetime(bule, &ba_lifetime, &br_adv);
+	dbg("Callback to bu_refresh after %d seconds\n", bule->delay.tv_sec);
+	bule->callback = bu_refresh;
+	bul_update_expire(bule);
+	bul_update_timer(bule);
+}
+
+
+static void mn_process_cn_ba(struct ip6_mh_binding_ack *ba, ssize_t len,
+			     struct mh_options *mh_opts, struct bulentry *bule)
+{
+	struct timespec now, ba_lifetime, br_adv;
+	uint16_t seqno;
+
+	/* First check authenticator */
+	if (mn_chk_bauth(ba, len, mh_opts, bule))
+		return;
+
+	/* Then sequence number */
+	seqno = ntohs(ba->ip6mhba_seqno);
+	if ((bule->seq != seqno) &&
+	    (ba->ip6mhba_status != IP6_MH_BAS_SEQNO_BAD)) {
+		/* In this case, ignore BA and resend BU. */
+		MDBG("Got BA with incorrect sequence number %d, "
+		     "the one sent in BU was %d\n", seqno, bule->seq);
+		return;
+	}
+
+	bule->do_send_bu = 0;
+	bule->consecutive_resends = 0;
+	clock_gettime(CLOCK_REALTIME, &now);
+	if (ba->ip6mhba_status >= IP6_MH_BAS_UNSPECIFIED) {
+		if (ba->ip6mhba_status == IP6_MH_BAS_SEQNO_BAD) {
+			clock_gettime(CLOCK_REALTIME, &bule->lastsent);
+			bule->seq = seqno + 1;
+			mn_get_ro_lifetime(bule->home, &bule->lifetime, 0);
+			bule->callback = bu_resend;
+			pre_bu_bul_update(bule);
+			mn_send_bu_msg(bule);
+			bule->delay = conf.InitialBindackTimeoutReReg_ts;
+			bul_update_timer(bule);
+		} else { /* Don't resend BUs to this CN */
+			bule_invalidate(bule, &now, 1);
+		}
+	}
+
+	if (!bule->wait_ack) {
+		MDBG("unexpected BA, ignoring\n");
+		return;
+	}
+	bule->wait_ack = 0;
+
+	tssetsec(ba_lifetime, ntohs(ba->ip6mhba_lifetime) << 2);
+	br_adv = ba_lifetime;
+	tsadd(bule->lastsent, ba_lifetime, bule->hard_expire);
+	post_ba_bul_update(bule);
+
 	if (!tsisset(ba_lifetime)) {
 		dbg("Deleting bul entry\n");
 		bul_delete(bule);
 	}  else {
 		set_bule_lifetime(bule, &ba_lifetime, &br_adv);
-		if (bule->flags & IP6_MH_BU_HOME) {
-			dbg("Callback to bu_refresh after %d seconds\n",
-			    bule->delay.tv_sec);
-			bule->callback = bu_refresh;
-		} else {
-			dbg("Callback to mn_rr_check_entry after %d seconds\n",
-			    bule->delay.tv_sec);
-			bule->callback = mn_rr_check_entry; 
-		}
+		dbg("Callback to mn_rr_check_entry after %d seconds\n",
+		    bule->delay.tv_sec);
+		bule->callback = mn_rr_check_entry;
 		bul_update_expire(bule);
 		bul_update_timer(bule);
 	}
+}
+
+
+static void mn_recv_ba(const struct ip6_mh *mh, ssize_t len,
+		       const struct in6_addr_bundle *in,
+		       __attribute__ ((unused)) int iif)
+{
+	struct ip6_mh_binding_ack *ba = (struct ip6_mh_binding_ack *)mh;
+	struct mh_options mh_opts;
+	struct bulentry *bule;
+	ssize_t ba_len = sizeof(struct ip6_mh_binding_ack);
+
+	TRACE;
+
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_BA);
+
+	if (len < ba_len || mh_opt_parse(mh, len, ba_len, &mh_opts) < 0)
+	    return;
+
+	dbg("Got BA (status %d) from %x:%x:%x:%x:%x:%x:%x:%x to home address "
+	    "%x:%x:%x:%x:%x:%x:%x:%x with coa %x:%x:%x:%x:%x:%x:%x:%x. ",
+	    ba->ip6mhba_status, NIP6ADDR(in->src), NIP6ADDR(in->dst),
+	    NIP6ADDR(in->local_coa != NULL ? in->local_coa : &in6addr_any));
+
+	pthread_rwlock_wrlock(&mn_lock);
+
+	bule = bul_get(NULL, in->dst, in->src);
+	if (!bule || bule->type != BUL_ENTRY) {
+		dbg("No corresponding BUL entry found!\n");
+		goto out;
+	}
+	dbg("Dumping corresponding BULE\n");
+	dbg_func(bule, dump_bule);
+
+	if (bule->flags & IP6_MH_BU_HOME)
+		mn_process_ha_ba(ba, &mh_opts, bule);
+	else
+		mn_process_cn_ba(ba, len, &mh_opts, bule);
+
+ out:
 	pthread_rwlock_unlock(&mn_lock);
 }
 
@@ -2172,6 +2224,13 @@ static struct md_coa *mn_get_coa(const struct home_addr_info *hai, int iif,
 	return best_coa;
 }
 
+int mn_is_at_home(struct list_head *prefixes,
+		  const struct in6_addr *home_prefix, int home_plen)
+{
+	return conf.NoHomeReturn ? 0 : prefix_list_find(prefixes, home_prefix,
+							home_plen);
+}
+
 static int mn_make_ho_verdict(const struct movement_event *me,
 			      const struct home_addr_info *hai, 
 			      struct md_router **next_rtr,
@@ -2211,6 +2270,12 @@ static int mn_make_ho_verdict(const struct movement_event *me,
 		assert(!list_empty(&me->iface->default_rtr));
 	case ME_LINK_UP:
 		assert(me->iface != NULL);
+
+		/* See comment below for ME_COA_NEW */
+		if (conf.UseMnHaIPsec && conf.KeyMngMobCapability &&
+		    (hai->home_reg_status == HOME_REG_UNCERTAIN ||
+		     mn_ipsec_larval_sa() > 0))
+			return MN_HO_IGNORE;
 		break;
 	case ME_RTR_BACK:
 	case ME_RTR_UPDATED:
@@ -2233,6 +2298,20 @@ static int mn_make_ho_verdict(const struct movement_event *me,
 		assert(me->iface != NULL);
 		assert(me->coa != NULL);
 		assert(me->iface->ifindex == me->coa->ifindex);
+
+		/* During first registration, when dynamic keying is used, it
+		 * is a bad idea to change our mind and select another CoA.
+		 * This leads to desync between local IKE daemon and remote
+		 * one. We must wait for the completion (or failure) of the
+		 * first registration.
+		 *
+		 * Another case where we should not do that is when an ACQUIRE
+		 * is in progress (i.e. some larval SA exist), to avoid
+		 * shooting the IKE daemon in the foot */
+		if (conf.UseMnHaIPsec && conf.KeyMngMobCapability &&
+		    (hai->home_reg_status == HOME_REG_UNCERTAIN ||
+		     mn_ipsec_larval_sa() > 0))
+			return MN_HO_IGNORE;
 		break;
 	case ME_COA_EXPIRED:
 		assert(me->iface != NULL);
@@ -2261,6 +2340,8 @@ static int mn_make_ho_verdict(const struct movement_event *me,
 
 		*next_coa = me->coa;
 		return MN_HO_CHECK_LIFETIME;
+	case ME_INIT:
+		break;
 	default:
 		return MN_HO_IGNORE;
 	}
@@ -2351,45 +2432,50 @@ static void mn_chk_ho_verdict(struct home_addr_info *hai,
 	}
 }
 
+/* Iterate on existing home address info structures, check verdic for each and
+ * then perform movement if verdict is positive. Just do nothing if at home or
+ * waiting for BA. Function must be called with rw lock acquired on mn_lock */
+static void mn_move_positive_non_home(void)
+{
+	struct list_head *lh;
+	struct home_addr_info *hai;
+
+	if (pending_bas)
+		return;
+
+	list_for_each(lh, &home_addr_list) {
+		hai = list_entry(lh, struct home_addr_info, list);
+		if (!hai->at_home && positive_ho_verdict(hai->verdict))
+			mn_move(hai);
+	}
+}
+
+/* Handle (non NULL) movement events */
 int mn_movement_event(struct movement_event *event)
 {
 	struct list_head *lh;
 	struct home_addr_info *hai;
 
-        /* First de-registration */
-
 	pthread_rwlock_wrlock(&mn_lock);
 
-	if (event != NULL) {
-		if (event->event_type == ME_DHAAD) {
-			hai = mn_get_home_addr_by_dhaadid(event->data);
-			if (hai == NULL) {
-				pthread_rwlock_unlock(&mn_lock);
-				return 0;
-			}
-			dhaad_stop(hai);
-			mn_chk_ho_verdict(hai, event);
-		} else {
-			if (event->event_type == ME_COA_EXPIRED)
-				mn_rr_delete_co(&event->coa->addr);
-			list_for_each(lh, &home_addr_list) {
-				hai = list_entry(lh, 
-						 struct home_addr_info, list);
-				mn_chk_ho_verdict(hai, event);
-			}
-		}
-	}
-	/* Then registration if we are not at home,
-	   otherwise we need to wait for BA to avoid forwarding loops */
-	if (!pending_bas) {
+	if (event->event_type == ME_DHAAD) {
+		hai = mn_get_home_addr_by_dhaadid(event->data);
+		if (hai == NULL)
+			goto out;
+		dhaad_stop(hai);
+		mn_chk_ho_verdict(hai, event);
+	} else {
+		if (event->event_type == ME_COA_EXPIRED)
+			mn_rr_delete_co(&event->coa->addr);
 		list_for_each(lh, &home_addr_list) {
 			hai = list_entry(lh, struct home_addr_info, list);
-			if (!hai->at_home && 
-			    positive_ho_verdict(hai->verdict)) {
-				mn_move(hai);
-			}
+			mn_chk_ho_verdict(hai, event);
 		}
 	}
+
+	mn_move_positive_non_home();
+
+ out:
 	pthread_rwlock_unlock(&mn_lock);
 	return 0;
 }
