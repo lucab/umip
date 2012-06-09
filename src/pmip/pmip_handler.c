@@ -19,6 +19,7 @@
 #include "pmip_mag_proc.h"
 #include "pmip_msgs.h"
 //---------------------------------------------------------------------------------------------------------------------
+#include "tunnelctl.h"
 #include "ndisc.h"
 #ifdef ENABLE_VT
 #    include "vt.h"
@@ -163,6 +164,7 @@ void pmip_timer_bce_expired_handler(struct tq_elem *tqe)
         if (is_mag()) {
             dbg("Send NS for Neighbour Reachability for:%x:%x:%x:%x:%x:%x:%x:%x iif=%d\n", NIP6ADDR(&e->mn_hw_address), e->link);
             //Create NS for Reachability test!
+            //ndisc_send_ns(e->link, &conf.MagAddressIngress[0], solicited_mcast(&e->mn_suffix), get_mn_addr(e));
             ndisc_send_ns(e->link, get_mn_addr(e));
 
 
@@ -191,6 +193,31 @@ void pmip_timer_bce_expired_handler(struct tq_elem *tqe)
         dbg("pthread_rwlock_unlock(&pmip_lock) %s\n", strerror(mutex_return_code));
     }
 }
+//---------------------------------------------------------------------------------------------------------------------
+void pmip_timer_tunnel_expired_handler(struct tq_elem *tqe)
+{
+    int mutex_return_code;
+	int res;
+
+    mutex_return_code = pthread_rwlock_wrlock(&pmip_lock);
+    if (mutex_return_code != 0) {
+        dbg("pthread_rwlock_wrlock(&pmip_lock) %s\n", strerror(mutex_return_code));
+    }
+    printf("-------------------------------------\n");
+    printf("-pmip_timer_tunnel_expired_handler()-\n");
+    printf("-------------------------------------\n");
+    if (!task_interrupted()) {
+        tunnel_timer_t *tt = container_of(tqe, tunnel_timer_t, tqe);
+        res = tunnel_del(tt->tunnel, 0, 0);
+        tt->lifetime.tv_nsec = 0;
+        tt->lifetime.tv_sec  = 0;
+    }
+    mutex_return_code = pthread_rwlock_unlock(&pmip_lock);
+    if (mutex_return_code != 0) {
+        dbg("pthread_rwlock_unlock(&pmip_lock) %s\n", strerror(mutex_return_code));
+    }
+}
+
 
 /**
  * Handlers defined for MH and ICMP messages.
@@ -234,7 +261,7 @@ static inline int ipv6_addr_is_linklocal(const struct in6_addr *addr)
  * handler called when receiving a router solicitation
  */
 //hip
-static void pmip_mag_recv_rs(const struct icmp6_hdr *ih, ssize_t len, const struct in6_addr *saddr, const struct in6_addr *daddr, int iif, int hoplimit)
+static void pmip_mag_recv_rs(const struct icmp6_hdr *ih, __attribute__ ((unused)) ssize_t len, const struct in6_addr *saddr, const struct in6_addr *daddr, int iif, int hoplimit)
 {
     dbg("\n");
     dbg("Router Solicitation received \n");

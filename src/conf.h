@@ -76,14 +76,10 @@ struct mip6_config {
     char*           LmaPmipNetworkDevice;       // PMIP LMA device, PMIP network side.
     struct in6_addr LmaCoreNetworkAddress;      // address of LMA, core network side.
     char*           LmaCoreNetworkDevice;       // PMIP LMA device, core network side.
-    struct in6_addr MagAddressIngress;          // ingress address of MAG.
-    struct in6_addr MagAddressEgress;           // egress address of MAG.
-    struct in6_addr Mag1AddressIngress;         // ingress address of MAG1.
-    struct in6_addr Mag1AddressEgress;          // egress address of MAG1.
-    struct in6_addr Mag2AddressIngress;         // ingress address of MAG1.
-    struct in6_addr Mag2AddressEgress;          // egress address of MAG1.
-    struct in6_addr Mag3AddressIngress;         // ingress address of MAG1.
-    struct in6_addr Mag3AddressEgress;          // egress address of MAG1.
+    unsigned int    NumMags;
+    #define PMIP_MAX_MAGS    64
+    struct in6_addr MagAddressIngress[PMIP_MAX_MAGS]; // ingress address of MAG.
+    struct in6_addr MagAddressEgress[PMIP_MAX_MAGS];  // egress address of MAG.
     char*           MagDeviceIngress;           // ingress device.
     char*           MagDeviceEgress;            // egress device.
     struct in6_addr OurAddress;
@@ -94,6 +90,7 @@ struct mip6_config {
     int             MaxMessageRetransmissions;  //indicates the maximum number of message retransmissions
     char            TunnelingEnabled;
     char            DynamicTunnelingEnabled;
+    struct timespec MaxDelayBeforeDynamicTunnelingDelete;
     char*           RadiusClientConfigFile;
     char*           RadiusPassword;
     char*           PcapSyslogAssociationGrepString;

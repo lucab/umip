@@ -157,13 +157,13 @@ struct in6_addr lma_mnid_hnp_map(struct in6_addr mnid, int *result)
 #ifdef USE_RADIUS
 int pmip_mn_to_hnp_cache_init(void)
 {
-	dbg ("\n");
+    dbg ("\n");
     memset(g_mn_hn_map, 0, sizeof(mnid_hnp_t) * MAX_MOBILES);
     rc_openlog("pmip_radius_client");
-	if ((g_rh = rc_read_config(conf.RadiusClientConfigFile)) == NULL) {
-		dbg ("ERROR INIT CLIENT RADIUS\n");
-        	return ERROR_RC;
-	} else {
+    if ((g_rh = rc_read_config(conf.RadiusClientConfigFile)) == NULL) {
+       dbg ("ERROR INIT CLIENT RADIUS\n");
+        return ERROR_RC;
+    } else {
         dbg ("RADIUS client radius read config file OK\n");
     }
 
@@ -257,10 +257,10 @@ struct in6_addr mnid_hnp_map(struct in6_addr mnid, int *aaa_result)
      send = NULL;
 
     sprintf(g_username, "%04x%04x%04x%04x", ntohs(mnid.s6_addr16[4]), ntohs(mnid.s6_addr16[5]), ntohs(mnid.s6_addr16[6]), ntohs(mnid.s6_addr16[7]));
-	g_username[16] = 0;
+    g_username[16] = 0;
     memset(g_passwd, '\0', AUTH_PASS_LEN + 1);
-	strncpy(g_passwd, conf.RadiusPassword, strlen(conf.RadiusPassword));
-	g_passwd[strlen(conf.RadiusPassword)] = '\0';
+    strncpy(g_passwd, conf.RadiusPassword, strlen(conf.RadiusPassword));
+    g_passwd[strlen(conf.RadiusPassword)] = '\0';
 // Fill in User-Name
 
     strncpy(g_username_realm, g_username, sizeof(g_username_realm));

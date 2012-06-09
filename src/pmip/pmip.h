@@ -65,31 +65,31 @@ To support Proxy Mobile IPv6, we extend these elements and implement handlers fo
 #ifndef __PMIP_H__
 #    define __PMIP_H__
 //-----------------------------------------------------------------------------
-#	include <unistd.h> // for NULL definition
-#	include <linux/types.h>
+#   include <unistd.h> // for NULL definition
+#   include <linux/types.h>
 //-----------------------------------------------------------------------------
-#	include <netinet/in.h>
-#	include <netinet/ip6.h>
-#	include <netinet/icmp6.h>
-#	include <netinet/ip6mh.h>
+#   include <netinet/in.h>
+#   include <netinet/ip6.h>
+#   include <netinet/icmp6.h>
+#   include <netinet/ip6mh.h>
 //-----------------------------------------------------------------------------
-#	include "mh.h"
+#   include "mh.h"
 //-----------------------------------------------------------------------------
-#	include "pmip_cache.h"
-#	include "pmip_consts.h"
-#	include "pmip_fsm.h"
-#	include "pmip_handler.h"
-#	include "pmip_hnp_cache.h"
-#	include "pmip_init.h"
-#	include "pmip_lma_proc.h"
-#	include "pmip_mag_proc.h"
-#	include "pmip_msgs.h"
-#	include "pmip_pcap.h"
-#	include "pmip_tunnel.h"
-#	include "pmip_types.h"
-#	ifdef ENABLE_VT
-#   	include "vt.h"
-#	endif
-#	include "conf.h"
+#   include "pmip_cache.h"
+#   include "pmip_consts.h"
+#   include "pmip_fsm.h"
+#   include "pmip_handler.h"
+#   include "pmip_hnp_cache.h"
+#   include "pmip_init.h"
+#   include "pmip_lma_proc.h"
+#   include "pmip_mag_proc.h"
+#   include "pmip_msgs.h"
+#   include "pmip_pcap.h"
+#   include "pmip_tunnel.h"
+#   include "pmip_types.h"
+#   ifdef ENABLE_VT
+#       include "vt.h"
+#   endif
+#   include "conf.h"
 #endif
 /*@}*/

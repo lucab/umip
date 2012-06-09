@@ -85,6 +85,14 @@ protected_pmip_mag_proc(int mag_start_registration(pmip_entry_t * bce);)
 * \note     Creates a tunnel between MAG and LMA, set a route for uplink traffic towards LMA if the route does not exist, send a router advertisement to the mobile node, and finally set the route to reach the mobile node.
 */
 protected_pmip_mag_proc(int mag_end_registration(pmip_entry_t * bce, int iif);)
+/*! \fn int mag_end_registration_no_new_tunnel(pmip_entry_t * bce, int )
+* \brief   End the Location Registration Procedure
+* \param[in]  bce A binding cache entry
+* \param[in]  iif Interface id used to communicate with the LMA
+* \return   Always Zero.
+* \note     Does not create a tunnel between MAG and LMA, does not set a route for uplink traffic towards LMA, send a router advertisement to the mobile node, and finally set the route to reach the mobile node.
+*/
+protected_pmip_mag_proc(int mag_end_registration_no_new_tunnel(pmip_entry_t * bce, __attribute__ ((unused)) int iif);)
 /*! \fn int mag_force_update_registration(pmip_entry_t * bce, int )
 * \brief   Start the Location Registration Procedure for a mobile node by sending a PBU to the LMA.
 * \param[in]  bce A binding cache entry
@@ -94,7 +102,7 @@ protected_pmip_mag_proc(int mag_end_registration(pmip_entry_t * bce, int iif);)
 *           so when the mobile come back again, we have to register again to the LMA, in order to let LMA build
 *           a tunnel between LMA and this MAG.
 */
-protected_pmip_mag_proc(int mag_force_update_registration(pmip_entry_t * bce, int iif);)
+protected_pmip_mag_proc(int mag_force_update_registration(pmip_entry_t * bce, __attribute__ ((unused)) int iif);)
 /*! \fn int mag_kickoff_ra(pmip_entry_t * bce)
 * \brief  Start sendind router advertisements to a mobile node.
 * \param[in]  bce A binding cache entry
@@ -114,6 +122,14 @@ private_pmip_mag_proc(int check_ip6_forwarding(void);)
 * \note The informations are retrieved by comparing /proc/net/if_inet6 with the configuration variable MagAddressIngress.
 */
 protected_pmip_mag_proc(int mag_get_ingress_info(int *if_index, char *dev_name_mn_link);)
+/*! \fn int mag_get_egress_info(int *, char *)
+* \brief Retrieve the link local address of the MAG interface connected to LMA.
+* \param[out]  if_index         The interface identifier
+* \param[out]  dev_name_mn_link The name of the interface
+* \return   1 if success, else -1.
+* \note The informations are retrieved by comparing /proc/net/if_inet6 with the configuration variable MagAddressEgress.
+*/
+protected_pmip_mag_proc(int mag_get_egress_info(int *if_index, char *dev_name_mn_link);)
 /*! \fn int setup_linklocal_addr(struct in6_addr *)
 * \brief Retrieve the link local address of the MAG interface accessible to mobile nodes.
 * \param[out]  src The link local address.

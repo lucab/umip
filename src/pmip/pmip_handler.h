@@ -35,6 +35,7 @@
 //-----------------------------------------------------------------------------
 #    include <netinet/ip6mh.h>
 #    include "pmip_cache.h"
+#    include "pmip_tunnel.h"
 //-----------------------------------------------------------------------------
 protected_pmip_handler(struct icmp6_handler pmip_mag_rs_handler;)
 protected_pmip_handler(struct mh_handler    pmip_mag_pba_handler;)
@@ -78,5 +79,10 @@ private_pmip_handler(  void             pmip_timer_retrans_pbu_handler(struct tq
 * \param[in]  tqe A task queue element
 */
 protected_pmip_handler(void             pmip_timer_bce_expired_handler(struct tq_elem *tqe);)
+/*! \fn void             pmip_timer_tunnel_expired_handler(struct tq_elem *tqe)
+* \brief  Handler triggered by add_task_abs for tunnel expiry and deletion
+* \param[in]  tqe A task queue element
+*/
+protected_pmip_handler(void             pmip_timer_tunnel_expired_handler(struct tq_elem *tqe);)
 #endif
 /** @}*/

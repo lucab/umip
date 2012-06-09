@@ -188,7 +188,7 @@ protected_pmip_msgs(int mh_pba_parse(msg_info_t * info, struct ip6_mh_binding_ac
 * \param[in]  hoplimit  Hop limit value found in RS message.
 * \return   Zero.
 */
-protected_pmip_msgs(int icmp_rs_parse(msg_info_t * info, struct nd_router_solicit *rs, const struct in6_addr *saddr, const struct in6_addr *daddr, int iif, int hoplimit);)
+protected_pmip_msgs(int icmp_rs_parse(msg_info_t * info, __attribute__ ((unused)) struct nd_router_solicit *rs, const struct in6_addr *saddr, const struct in6_addr *daddr, int iif, int hoplimit);)
 /*! \fn int icmp_na_parse(msg_info_t *, struct nd_neighbor_advert *, const struct in6_addr *, const struct in6_addr *, int , int )
 * \brief Parse ICMPv6 NA message.
 * \param[in-out]   info Storage containing all necessary informations about the message received.

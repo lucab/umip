@@ -168,12 +168,9 @@ The following definitions are ignored unless the node is configured as a LMA:
 .BR "   MaxMessageRetransmissions "                       "decimal" ";"
 .BR "   TunnelingEnabled "                                "enabled | disabled" ";"
 .BR "   DynamicTunnelingEnabled "                         "enabled | disabled" ";"
-.BR "   Mag1AddressIngress "                              "address" ";"
-.BR "   Mag1AddressEgress "                               "address" ";"
-.BR "   Mag2AddressIngress "                              "address" ";"
-.BR "   Mag2AddressEgress "                               "address" ";"
-.BR "   Mag3AddressIngress "                              "address" ";"
-.BR "   Mag3AddressEgress "                               "address" ";"
+ These 2 lines repeated for each declared MAG
+.BR "   MagAddressIngress "                               "address" ";"
+.BR "   MagAddressEgress "                                "address" ";"
 .BR "}"
 .fi
 
@@ -191,12 +188,12 @@ definitions are detailed below:
 
 This flag indicates whether or not the timestamp-based approach
 for message ordering is in use in that Proxy Mobile IPv6 domain.
-When the value for this flag is set to enabled, all the mobile 
+When the value for this flag is set to enabled, all the mobile
 access gateways in that Proxy Mobile IPv6 domain MUST apply the
 timestamp-based considerations listed in Section 5.5 of RFC5213.
 When the value of this flag is set to disabled (NOT IMPLEMENTED),
-sequence-number-based considerations listed in Section 5.5 of 
-RFC5213MUST be applied. The default value for this flag is set 
+sequence-number-based considerations listed in Section 5.5 of
+RFC5213MUST be applied. The default value for this flag is set
 to value of enabled, indicating that the timestamp-based mechanism
  is in use in that Proxy Mobile IPv6 domain.
 
@@ -207,13 +204,13 @@ to value of enabled, indicating that the timestamp-based mechanism
 This flag indicates whether or not the mobile-node-generated
 timestamp approach is in use in that Proxy Mobile IPv6 domain.
 When the value for this flag is set to enabled (NOT IMPLEMENTED),
-the local mobility anchors and mobile access gateways in that 
-Proxy Mobile IPv6 domain MUST apply the mobile node generated 
+the local mobility anchors and mobile access gateways in that
+Proxy Mobile IPv6 domain MUST apply the mobile node generated
 timestamp considerations as specified in Section 5.5 of RFC5213.
 
 This flag is relevant only when timestamp-based approach is in
 use.  The value for this flag MUST NOT be set to value of enabled,
-if the value of the TimestampBasedApproachInUse flag is set to 
+if the value of the TimestampBasedApproachInUse flag is set to
 disabled.
 
 .TP
@@ -303,7 +300,7 @@ connected to the same link where are connected MAGs egress interfaces.
 .TP
 .BR "LmaPmipNetworkDevice " "network device" ";"
 
-Device name of the network interface on LMA host connected to PMIP 
+Device name of the network interface on LMA host connected to PMIP
 domain (MAG1, ... MAGn).
 
 .TP
@@ -315,7 +312,7 @@ connected to the core network.
 .TP
 .BR "LmaCoreNetworkDevice " "network device" ";"
 
-Device name of the network interface on LMA host connected to 
+Device name of the network interface on LMA host connected to
 core network domain.
 
 .TP
@@ -338,43 +335,20 @@ Must be set to "enabled".
 .TP
 .BR "DynamicTunnelingEnabled " "enabled | disabled" ";"
 
-Must be set to "disabled", dynamic tunneling will be fully implemented soon.
+If enabled, then the creation (and deletion) of tunnel(s) between MAG(s) and LMA is on demand.
 
 .TP
-.BR "Mag1AddressIngress " "address" ";"
+.BR "MagAddressIngress " "address" ";"
 
 Address is an IPv6 address, it is the address of the interface
-connected to the mobile network of the first MAG.
+connected to the mobile network of a MAG.
 
 .TP
-.BR "Mag1AddressEgress " "address" ";"
+.BR "MagAddressEgress " "address" ";"
 
 Address is an IPv6 address, it is the address of the interface
-connected to the PMIP network of the first MAG.
+connected to the PMIP network of a MAG.
 
-.TP
-.BR "Mag2AddressIngress " "address" ";"
-
-Address is an IPv6 address, it is the address of the interface
-connected to the mobile network of the second MAG if any.
-
-.TP
-.BR "Mag2AddressEgress " "address" ";"
-
-Address is an IPv6 address, it is the address of the interface
-connected to the PMIP network of the second MAG if any.
-
-.TP
-.BR "Mag3AddressIngress " "address" ";"
-
-Address is an IPv6 address, it is the address of the interface
-connected to the mobile network of the third MAG if any.
-
-.TP
-.BR "Mag3AddressEgress " "address" ";"
-
-Address is an IPv6 address, it is the address of the interface
-connected to the PMIP network of the third MAG if any.
 
 
 
@@ -419,12 +393,12 @@ definitions are detailed below:
 
 This flag indicates whether or not the timestamp-based approach
 for message ordering is in use in that Proxy Mobile IPv6 domain.
-When the value for this flag is set to enabled, all the mobile 
+When the value for this flag is set to enabled, all the mobile
 access gateways in that Proxy Mobile IPv6 domain MUST apply the
 timestamp-based considerations listed in Section 5.5 of RFC5213.
 When the value of this flag is set to disabled (NOT IMPLEMENTED),
-sequence-number-based considerations listed in Section 5.5 of 
-RFC5213MUST be applied. The default value for this flag is set 
+sequence-number-based considerations listed in Section 5.5 of
+RFC5213MUST be applied. The default value for this flag is set
 to value of enabled, indicating that the timestamp-based mechanism
  is in use in that Proxy Mobile IPv6 domain.
 
@@ -435,13 +409,13 @@ to value of enabled, indicating that the timestamp-based mechanism
 This flag indicates whether or not the mobile-node-generated
 timestamp approach is in use in that Proxy Mobile IPv6 domain.
 When the value for this flag is set to enabled (NOT IMPLEMENTED),
-the local mobility anchors and mobile access gateways in that 
-Proxy Mobile IPv6 domain MUST apply the mobile node generated 
+the local mobility anchors and mobile access gateways in that
+Proxy Mobile IPv6 domain MUST apply the mobile node generated
 timestamp considerations as specified in Section 5.5 of RFC5213.
 
 This flag is relevant only when timestamp-based approach is in
 use.  The value for this flag MUST NOT be set to value of enabled,
-if the value of the TimestampBasedApproachInUse flag is set to 
+if the value of the TimestampBasedApproachInUse flag is set to
 disabled.
 
 .TP
@@ -472,11 +446,11 @@ visiting mobile node and a correspondent node that is locally
 connected to one of the interfaces of the mobile access gateway.
 The correspondent node can be another visiting mobile node as
 well, or a local fixed node.
-The default value for this flag is set to a value of disabled, 
+The default value for this flag is set to a value of disabled,
 indicating that the mobile access gateway MUST reverse tunnel all
  the traffic to the mobile node's local mobility anchor.
 
-When the value of this flag is set to a value of enabled, the 
+When the value of this flag is set to a value of enabled, the
 mobile access gateway MUST route the traffic locally.
 
 This aspect of local routing MAY be defined as policy on a per
@@ -493,7 +467,7 @@ connected to the same link where are connected MAGs egress interfaces.
 .BR "MagAddressIngress " "address" ";"
 
 Address is an IPv6 address, it is the address of the MAG egress interface.
-(Connected to the mobile network side). This option must be included 
+(Connected to the mobile network side). This option must be included
 in a ProxyMipMag definition.
 
 .TP
@@ -554,15 +528,15 @@ Radius password for authenticating on the radius server.
 .TP
 .BR "PcapSyslogAssociationGrepString " "string" ";"
 
-String that should match the syslog message coming from an access point saying 
+String that should match the syslog message coming from an access point saying
 a mobile node has associated with the access point. The grep string should end
 just before the first MAC address string (for example 00:11:22:33:44:55).
 
 .TP
 .BR "PcapSyslogDeAssociationGrepString " "string" ";"
 
-String that should match the syslog message coming from an access point saying 
-a mobile node has de-associated with the access point. The grep string should 
+String that should match the syslog message coming from an access point saying
+a mobile node has de-associated with the access point. The grep string should
 end just before the first MAC address string (for example 00:11:22:33:44:55).
 
 

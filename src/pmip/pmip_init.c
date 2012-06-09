@@ -42,16 +42,16 @@ extern struct sock icmp6_sock;
 void init_mag_icmp_sock(void)
 //---------------------------------------------------------------------------------------------------------------------
 {
-	if (0) {
-		int on = 1;
-		dbg("Set SOLRAW, IPV6_ALL_SOLICTED_MCAST_ADDR = %d\n", IPV6_ALL_SOLICITED_MCAST_ADDR);
-		if (setsockopt(icmp6_sock.fd, SOL_RAW, IPV6_ALL_SOLICITED_MCAST_ADDR, &on, sizeof(on)) < 0) {
-			perror("allow all solicited mcast address\n");
-		}
-	}
+    if (0) {
+        int on = 1;
+        dbg("Set SOLRAW, IPV6_ALL_SOLICTED_MCAST_ADDR = %d\n", IPV6_ALL_SOLICITED_MCAST_ADDR);
+        if (setsockopt(icmp6_sock.fd, SOL_RAW, IPV6_ALL_SOLICITED_MCAST_ADDR, &on, sizeof(on)) < 0) {
+            perror("allow all solicited mcast address\n");
+        }
+    }
 }
 //---------------------------------------------------------------------------------------------------------------------
-static int pmip_cache_delete_each(void *data, void *arg)
+static int pmip_cache_delete_each(void *data, __attribute__ ((unused)) void *arg)
 //---------------------------------------------------------------------------------------------------------------------
 {
     pmip_entry_t *bce = (pmip_entry_t *) data;
@@ -153,65 +153,75 @@ int pmip_common_init(void)
         dbg("Add default rule for RT6_TABLE_MIP6 failed, insufficient privilege/kernel options missing!\n");
         return -1;
     }
-	return 0;
+
+    /**
+    * Initialize timers of tunnels (tunnels between LMA and MAGs).
+    */
+    if (pmip_tunnels_init() < 0) {
+        dbg("PMIP Tunnels initialization failed! \n");
+        return -1;
+    } else {
+        dbg("PMIP Tunnels are initialized!\n");
+    }
+    return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
 int pmip_mag_init(void)
 //---------------------------------------------------------------------------------------------------------------------
 {
-	pmip_common_init();
-	conf.OurAddress = conf.MagAddressEgress;
-	conf.HomeNetworkPrefix = get_node_prefix(&conf.MagAddressIngress); //copy Home network prefix.
-	dbg("Running as MAG entity\n");
-	dbg("Entity Egress Address: %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&conf.OurAddress));
-	dbg("Entity Ingress Address: %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&conf.MagAddressIngress));
-	dbg("Home Network Prefix Address: %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&conf.HomeNetworkPrefix));
-	if (mag_init_fsm() < 0) {
-		dbg("Initialization of FSM failed...exit\n");
-		exit(-1);
-	}
+    pmip_common_init();
+    conf.OurAddress = conf.MagAddressEgress[0];
+    conf.HomeNetworkPrefix = get_node_prefix(&conf.MagAddressIngress[0]); //copy Home network prefix.
+    dbg("Running as MAG entity\n");
+    dbg("Entity Egress Address: %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&conf.OurAddress));
+    dbg("Entity Ingress Address: %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&conf.MagAddressIngress[0]));
+    dbg("Home Network Prefix Address: %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&conf.HomeNetworkPrefix));
+    if (mag_init_fsm() < 0) {
+        dbg("Initialization of FSM failed...exit\n");
+        exit(-1);
+    }
 
-	init_pbu_sequence_number();
+    init_pbu_sequence_number();
 
-	init_iface_ra();
-	init_mag_icmp_sock();
-	dbg("Initializing the NA handler\n");
-	// to capture NA message
-	icmp6_handler_reg(ND_NEIGHBOR_ADVERT, &pmip_mag_recv_na_handler);
-	dbg("Initializing the RS handler\n");
-	// to capture RS message
-	icmp6_handler_reg(ND_ROUTER_SOLICIT, &pmip_mag_rs_handler);
-	dbg("Initializing the PBA handler\n");
-	//To capture PBA message.
-	mh_handler_reg(IP6_MH_TYPE_BACK, &pmip_mag_pba_handler);
+    init_iface_ra();
+    init_mag_icmp_sock();
+    dbg("Initializing the NA handler\n");
+    // to capture NA message
+    icmp6_handler_reg(ND_NEIGHBOR_ADVERT, &pmip_mag_recv_na_handler);
+    dbg("Initializing the RS handler\n");
+    // to capture RS message
+    icmp6_handler_reg(ND_ROUTER_SOLICIT, &pmip_mag_rs_handler);
+    dbg("Initializing the PBA handler\n");
+    //To capture PBA message.
+    mh_handler_reg(IP6_MH_TYPE_BACK, &pmip_mag_pba_handler);
 
-	/**
-	* Deletes the default route for MN prefix so routing is per unicast MN address!
-	**/
-	//route_del((int) NULL, RT6_TABLE_MAIN, IP6_RT_PRIO_ADDRCONF, &in6addr_any, 0, &conf.HomeNetworkPrefix, 64, NULL);
-	dbg("Initializing the HNP cache\n");
-	if (pmip_mn_to_hnp_cache_init() < 0) {
-		exit (-1);
-	}
+    /**
+    * Deletes the default route for MN prefix so routing is per unicast MN address!
+    **/
+    //route_del((int) NULL, RT6_TABLE_MAIN, IP6_RT_PRIO_ADDRCONF, &in6addr_any, 0, &conf.HomeNetworkPrefix, 64, NULL);
+    dbg("Initializing the HNP cache\n");
+    if (pmip_mn_to_hnp_cache_init() < 0) {
+        exit (-1);
+    }
 
     char devname[32];
-	int iif;
-	dbg("Getting ingress informations\n");
-	mag_get_ingress_info(&iif, devname);
-	dbg("Starting capturing AP messages for incoming MNs detection\n");
-	pmip_pcap_loop(devname, iif);
-	return 0;
+    int iif;
+    dbg("Getting ingress informations\n");
+    mag_get_ingress_info(&iif, devname);
+    dbg("Starting capturing AP messages for incoming MNs detection\n");
+    pmip_pcap_loop(devname, iif);
+    return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
 int pmip_lma_init(void)
 //---------------------------------------------------------------------------------------------------------------------
 {
-	pmip_common_init();
-	pmip_lma_mn_to_hnp_cache_init();
-	conf.OurAddress = conf.LmaAddress;
-	dbg("Entity Address: %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&conf.OurAddress));
-	dbg("Initializing the PBU handler\n");
-	//To capture PBU message.
-	mh_handler_reg(IP6_MH_TYPE_BU, &pmip_lma_pbu_handler);
-	return 0;
+    pmip_common_init();
+    pmip_lma_mn_to_hnp_cache_init();
+    conf.OurAddress = conf.LmaAddress;
+    dbg("Entity Address: %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&conf.OurAddress));
+    dbg("Initializing the PBU handler\n");
+    //To capture PBU message.
+    mh_handler_reg(IP6_MH_TYPE_BU, &pmip_lma_pbu_handler);
+    return 0;
 }

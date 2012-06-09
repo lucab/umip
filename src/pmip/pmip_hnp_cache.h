@@ -39,8 +39,8 @@
 /*! \struct  mnid_hnp_t
 * \brief Data structure to store the association of a network prefix and a mobile interface identifier.
 */typedef struct mnid_hnp_t {
-	struct in6_addr mn_prefix;  /*!< \brief Network Address Prefix for mobile node */
-	struct in6_addr mn_iid;     /*!< \brief Mobile node MAC address (IID) */
+    struct in6_addr mn_prefix;  /*!< \brief Network Address Prefix for mobile node */
+    struct in6_addr mn_iid;     /*!< \brief Mobile node MAC address (IID) */
 } mnid_hnp_t;
 //-PROTOTYPES----------------------------------------------------------------------------
 /*! \fn struct in6_addr EUI64_to_EUI48(struct in6_addr )

@@ -326,12 +326,6 @@ LmaCoreNetworkAddress                           { return LMACORENETWORKADDRESS; 
 LmaCoreNetworkDevice                            { return LMACORENETWORKDEVICE; }
 MagAddressIngress				{ return MAGADDRESSINGRESS; }
 MagAddressEgress				{ return MAGADDRESSEGRESS; }
-Mag1AddressIngress				{ return MAG1ADDRESSINGRESS; }
-Mag1AddressEgress				{ return MAG1ADDRESSEGRESS; }
-Mag2AddressIngress				{ return MAG2ADDRESSINGRESS; }
-Mag2AddressEgress				{ return MAG2ADDRESSEGRESS; }
-Mag3AddressIngress				{ return MAG3ADDRESSINGRESS; }
-Mag3AddressEgress				{ return MAG3ADDRESSEGRESS; }
 MagDeviceIngress				{ return MAGDEVICEINGRESS; }
 MagDeviceEgress					{ return MAGDEVICEEGRESS; }
 OurAddress					{ return OURADDRESS; }
@@ -342,6 +336,7 @@ RetransmissionTimeOut				{ return RETRANSMISSIONTIMEOUT; }
 MaxMessageRetransmissions			{ return MAXMESSAGERETRANSMISSIONS; }
 TunnelingEnabled				{ return TUNNELINGENABLED; }
 DynamicTunnelingEnabled				{ return DYNAMICTUNNELINGENABLED; }
+MaxDelayBeforeDynamicTunnelingDelete	{ return MAXDELAYBEFOREDYNAMICTUNNELINGDELETE; }
 ProxyMipLma					{ return PROXYMIPLMA; }
 ProxyMipMag					{ return PROXYMIPMAG; }
 RadiusPassword					{ return RADIUSPASSWORD; }

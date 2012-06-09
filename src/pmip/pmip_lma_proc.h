@@ -17,25 +17,25 @@
 #ifndef __PMIP_LMA_PROC_H__
 #    define __PMIP_LMA_PROC_H__
 //-----------------------------------------------------------------------------
-#	ifdef PMIP_LMA_PROC_C
-#		define private_pmip_lma_proc(x) x
-#		define protected_pmip_lma_proc(x) x
-#		define public_pmip_lma_proc(x) x
-#	else
-#		ifdef PMIP
-#			define private_pmip_lma_proc(x)
-#			define protected_pmip_lma_proc(x) extern x
-#			define public_pmip_lma_proc(x) extern x
-#		else
-#			define private_pmip_lma_proc(x)
-#			define protected_pmip_lma_proc(x)
-#			define public_pmip_lma_proc(x) extern x
-#		endif
-#	endif
+#   ifdef PMIP_LMA_PROC_C
+#       define private_pmip_lma_proc(x) x
+#       define protected_pmip_lma_proc(x) x
+#       define public_pmip_lma_proc(x) x
+#   else
+#       ifdef PMIP
+#           define private_pmip_lma_proc(x)
+#           define protected_pmip_lma_proc(x) extern x
+#           define public_pmip_lma_proc(x) extern x
+#       else
+#           define private_pmip_lma_proc(x)
+#           define protected_pmip_lma_proc(x)
+#           define public_pmip_lma_proc(x) extern x
+#       endif
+#   endif
 //-----------------------------------------------------------------------------
-#	include <netinet/ip6.h>
-#	include "pmip_cache.h"
-#	include "pmip_msgs.h"
+#   include <netinet/ip6.h>
+#   include "pmip_cache.h"
+#   include "pmip_msgs.h"
 //-PROTOTYPES----------------------------------------------------------------------------
 /*! \fn int lma_setup_route(struct in6_addr *, int )
 * \brief Set a route by establishing a tunnel.
