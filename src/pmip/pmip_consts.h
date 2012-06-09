@@ -17,6 +17,7 @@
 #ifndef __pmip_consts_h
 #    define __pmip_consts_h
 #    include <netinet/in.h>
+#    include "conf.h"
 
 #    define MAX_MOBILES 64
 

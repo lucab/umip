@@ -4,11 +4,35 @@
 import sys
 import os
 import subprocess
+import getopt
 
 from subprocess  import *
 from netaddr import *
+
+g_path = os.getcwd()
+g_path = os.path.dirname(sys.argv[0]) + "/.."
+g_path = os.path.abspath(g_path)
+
+try:
+    opts, args = getopt.getopt(sys.argv[1:], "prd", ["pcap=", "runversion=", "pmipdir="])
+except getopt.GetoptError, err:
+    # print help information and exit:
+    print str(err) # will print something like "option -a not recognized"
+    sys.exit(2)
+
+g_pcap = "no"
+g_run_version = "1"
+
+for o,p in opts:
+  if o in ('-p','--pcap'):
+     g_pcap = p
+  elif o in ['-r','--runversion']:
+     g_run_version = str(p)
+  elif o in ['-d','--pmipdir']:
+     g_path = p
+
 ############################################################################################
-g_file_config="/usr/local/src/PMIPv6_v0.4.1/pmipv6-daemon-umip-0.4/extras/example-lma.conf"
+g_file_config=g_path+"/extras/example-lma.conf"
 ############################################################################################
 
 
@@ -26,6 +50,7 @@ g_Mag3AddressIngress                              = IPAddress('0::0')
 g_Mag3AddressEgress                               = IPAddress('0::0')
 
 
+
 g_fhandle = open(g_file_config, 'r')
 g_fcontent = g_fhandle.read()
 g_fhandle.close()
@@ -40,7 +65,7 @@ for line in lines:
     if 'RFC5213FixedMAGLinkLocalAddressOnAllAccessLinks' in line:
         print line
         g_RFC5213FixedMAGLinkLocalAddressOnAllAccessLinks = IPAddress(element)
-        
+
     elif 'RFC5213FixedMAGLinkLayerAddressOnAllAccessLinks' in line:
         print line
         g_RFC5213FixedMAGLinkLayerAddressOnAllAccessLinks = element
@@ -131,14 +156,27 @@ if g_Mag1AddressIngress != IPAddress('::'):
     command = "ip -6 route add " + Mag1AddressIngress.format() + "/64 via " + Mag1AddressEgress.format() + " dev " + g_LmaPmipNetworkDevice
     print command
     os.system(command)
+    # just to resolve, avoid ping6 since it is used for sync
+    command = "ssh -6 root@[" + Mag1AddressIngress.format() + "] \"ls /root\""
+    print command
+    os.system(command)
+
 
 if g_Mag2AddressIngress != IPAddress('::'):
     command = "ip -6 route add " + Mag2AddressIngress.format() + "/64 via " + Mag2AddressEgress.format() + " dev " + g_LmaPmipNetworkDevice
     print command
     os.system(command)
+    # just to resolve, avoid ping6 since it is used for sync
+    command = "ssh -6 root@[" + Mag2AddressIngress.format() + "] \"ls /root\""
+    print command
+    os.system(command)
 
 if g_Mag3AddressIngress != IPAddress('::'):
     command = "ip -6 route add " + Mag3AddressIngress.format() + "/64 via " + Mag3AddressEgress.format() + " dev " + g_LmaPmipNetworkDevice
+    print command
+    os.system(command)
+    # just to resolve, avoid ping6 since it is used for sync
+    command = "ssh -6 root@[" + Mag3AddressIngress.format() + "] \"ls /root\""
     print command
     os.system(command)
 
@@ -152,6 +190,16 @@ os.system(command)
 command = "pkill -9 pmip6d"
 print command
 os.system(command)
+
+if g_pcap == "yes":
+	command = "xhost + ; export DISPLAY=:0.0 ; sync; wireshark -i eth0 -k -n -w  "+ g_path + "/logs/lma2mags."+g_run_version+".pcap &"
+	value = os.system(command)
+	print value
+
+	command = "xhost + ; export DISPLAY=:0.0 ; sync; wireshark -i eth1 -k -n -w  "+ g_path + "/logs/lma2cn."+g_run_version+".pcap  &"
+	value = os.system(command)
+	print value
+
 
 command = '/usr/local/sbin/pmip6d -c ' + g_file_config
 print command

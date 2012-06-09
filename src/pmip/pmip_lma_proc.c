@@ -29,8 +29,8 @@ int lma_setup_route(struct in6_addr *pmip6_addr, int tunnel)
 {
     int res = 0;
     if (conf.TunnelingEnabled) {
-    dbg("Forward: Add new route for %x:%x:%x:%x:%x:%x:%x:%x in table %d\n", NIP6ADDR(pmip6_addr), RT6_TABLE_MIP6);
-    res = route_add(tunnel, RT6_TABLE_MIP6, RTPROT_MIP, 0, IP6_RT_PRIO_MIP6_FWD, &in6addr_any, 0, pmip6_addr, 128, NULL);
+        dbg("Forward: Add new route for %x:%x:%x:%x:%x:%x:%x:%x in table %d\n", NIP6ADDR(pmip6_addr), RT6_TABLE_MIP6);
+        res = route_add(tunnel, RT6_TABLE_MIP6, RTPROT_MIP, 0, IP6_RT_PRIO_MIP6_FWD, &in6addr_any, 0, pmip6_addr, 128, NULL);
     }
     return res;
 }
@@ -89,29 +89,29 @@ int lma_reg_no_new_tunnel(pmip_entry_t * bce)
 //---------------------------------------------------------------------------------------------------------------------
 int lma_dereg(pmip_entry_t * bce, msg_info_t * info, int propagate)
 {
-	if (bce != NULL) {
-		//Delete the Task
-		del_task(&bce->tqe);
-		//delete old route to old tunnel.
-		lma_remove_route(get_mn_addr(bce), bce->tunnel);
-		//decrement users of old tunnel.
-		pmip_tunnel_del(bce->tunnel);
-		if (propagate) {
-			dbg("Create PBA for deregistration for MAG (%x:%x:%x:%x:%x:%x:%x:%x)\n", NIP6ADDR(&bce->mn_serv_mag_addr));
-			struct in6_addr_bundle addrs;
-			struct timespec lifetime = { 0, 0 };
-			addrs.src = &conf.LmaAddress;
-			addrs.dst = &bce->mn_serv_mag_addr;
-			bce->seqno_in = info->seqno;
-			mh_send_pba(&addrs, bce, &lifetime, 0);
-		} else {
-			dbg("Doing nothing....\n");
-		}
-		bce->type = BCE_NO_ENTRY;
-	} else {
-		dbg("WARNING parameter pmip_entry_t * bce is NULL\n");
-		return -1;
-	}
+    if (bce != NULL) {
+        //Delete the Task
+        del_task(&bce->tqe);
+        //delete old route to old tunnel.
+        lma_remove_route(get_mn_addr(bce), bce->tunnel);
+        //decrement users of old tunnel.
+        pmip_tunnel_del(bce->tunnel);
+        if (propagate) {
+            dbg("Create PBA for deregistration for MAG (%x:%x:%x:%x:%x:%x:%x:%x)\n", NIP6ADDR(&bce->mn_serv_mag_addr));
+            struct in6_addr_bundle addrs;
+            struct timespec lifetime = { 0, 0 };
+            addrs.src = &conf.LmaAddress;
+            addrs.dst = &bce->mn_serv_mag_addr;
+            bce->seqno_in = info->seqno;
+            mh_send_pba(&addrs, bce, &lifetime, 0);
+        } else {
+            dbg("Doing nothing....\n");
+        }
+        bce->type = BCE_NO_ENTRY;
+    } else {
+        dbg("WARNING parameter pmip_entry_t * bce is NULL\n");
+        return -1;
+    }
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -142,8 +142,8 @@ int lma_update_binding_entry(pmip_entry_t * bce, msg_info_t * info)
                         //delete old route to old tunnel.
                         lma_remove_route(get_mn_addr(bce), bce->tunnel);
                         //decrement users of old tunnel.
-                        pmip_tunnel_del(bce->tunnel);
                         dbg("Deleting the old tunnel \n");
+                        pmip_tunnel_del(bce->tunnel);
                         result = 1;
                     } else {
                         dbg("Same serving MAG: %x:%x:%x:%x:%x:%x:%x:%x, No need to delete tunnel\n", NIP6ADDR(&info->src));
@@ -172,6 +172,7 @@ int lma_update_binding_entry(pmip_entry_t * bce, msg_info_t * info)
             bce->lifetime.tv_nsec   = 0;
             bce->n_rets_counter     = conf.MaxMessageRetransmissions;
             bce->seqno_in           = info->seqno;
+            dbg("bce->link %d => %d\n", bce->link, info->iif);
             bce->link               = info->iif;
             dbg("Finished updating the binding cache\n");
             return result;

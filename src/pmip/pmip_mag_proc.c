@@ -104,7 +104,7 @@ int mag_start_registration(pmip_entry_t * bce)
 {
     //Create PBU and send to the LMA
     struct in6_addr_bundle addrs;
-    addrs.src = &conf.MagAddressEgress;
+    addrs.src = &conf.MagAddressEgress[0];
     addrs.dst = &conf.LmaAddress;
 
     // min 4 seconds, because lifetime is sent over the network in PBU divided by 4
@@ -145,7 +145,7 @@ int mag_end_registration(pmip_entry_t * bce, int iif)
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int mag_end_registration_no_new_tunnel(pmip_entry_t * bce, int iif)
+int mag_end_registration_no_new_tunnel(pmip_entry_t * bce, __attribute__ ((unused)) int iif)
 {
     //Force the BCE type.
     bce->type = BCE_PMIP;
@@ -162,27 +162,27 @@ int mag_end_registration_no_new_tunnel(pmip_entry_t * bce, int iif)
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int mag_force_update_registration(pmip_entry_t * bce, int iif)
+int mag_force_update_registration(pmip_entry_t * bce, __attribute__ ((unused)) int iif)
 {
-	//int mutex_return_code;
+    //int mutex_return_code;
 
-	// first delete current task
-	/*mutex_return_code = pthread_rwlock_wrlock(&bce->lock);
-	if (mutex_return_code != 0) {
-		dbg("pthread_rwlock_wrlock(&bce->lock) %s\n", strerror(mutex_return_code));
-	}*/
-	if (bce->tqe.task != NULL) {
-		dbg("Deleting current BCE task\n");
-		del_task(&bce->tqe);
-	}
-	/*mutex_return_code = pthread_rwlock_unlock(&bce->lock);
-	if (mutex_return_code != 0) {
-		dbg("pthread_rwlock_unlock(&bce->lock) %s\n", strerror(mutex_return_code));
-	}*/
+    // first delete current task
+    /*mutex_return_code = pthread_rwlock_wrlock(&bce->lock);
+    if (mutex_return_code != 0) {
+        dbg("pthread_rwlock_wrlock(&bce->lock) %s\n", strerror(mutex_return_code));
+    }*/
+    if (bce->tqe.task != NULL) {
+        dbg("Deleting current BCE task\n");
+        del_task(&bce->tqe);
+    }
+    /*mutex_return_code = pthread_rwlock_unlock(&bce->lock);
+    if (mutex_return_code != 0) {
+        dbg("pthread_rwlock_unlock(&bce->lock) %s\n", strerror(mutex_return_code));
+    }*/
 
-	//Create PBU and send to the LMA
+    //Create PBU and send to the LMA
     struct in6_addr_bundle addrs;
-    addrs.src = &conf.MagAddressEgress;
+    addrs.src = &conf.MagAddressEgress[0];
     addrs.dst = &conf.LmaAddress;
 
     //struct timespec lifetime = { 3, 0 };
@@ -312,7 +312,7 @@ int mag_get_ingress_info(int *if_index, char *dev_name_mn_link)
             sscanf(str_addr + i * 2, "%02x", &ap);
             addr.s6_addr[i] = (unsigned char) ap;
         }
-        if (memcmp(&conf.MagAddressIngress, &addr, sizeof(struct in6_addr)) == 0) {
+        if (memcmp(&conf.MagAddressIngress[0], &addr, sizeof(struct in6_addr)) == 0) {
             strncpy(dev_name_mn_link, devname, 32);
             *if_index = if_idx;
             dbg("The interface name of the device that is used for communicate with MNs is %s\n", dev_name_mn_link);
@@ -322,6 +322,39 @@ int mag_get_ingress_info(int *if_index, char *dev_name_mn_link)
     }
     fclose(fp);
     dbg("No interface name of the device that is used for communicate with MNs found");
+    return -1;
+}
+//---------------------------------------------------------------------------------------------------------------------
+int mag_get_egress_info(int *if_index, char *dev_name_mn_link)
+{
+    FILE *fp;
+    char str_addr[INET6_ADDRSTRLEN];
+    unsigned int plen, scope, dad_status, if_idx;
+    struct in6_addr addr;
+    unsigned int ap;
+    int i;
+
+    char devname[32];
+    if ((fp = fopen("/proc/net/if_inet6", "r")) == NULL) {
+        dbg("you don't have root previleges, please logon as root, can't open %s:", "/proc/net/if_inet6");
+        return -1;
+    }
+    // first find the device name
+    while (fscanf(fp, "%32s %x %02x %02x %02x %15s\n", str_addr, &if_idx, &plen, &scope, &dad_status, devname) != EOF) {
+        for (i = 0; i < 16; i++) {
+            sscanf(str_addr + i * 2, "%02x", &ap);
+            addr.s6_addr[i] = (unsigned char) ap;
+        }
+        if (memcmp(&conf.MagAddressEgress[0], &addr, sizeof(struct in6_addr)) == 0) {
+            strncpy(dev_name_mn_link, devname, 32);
+            *if_index = if_idx;
+            dbg("The interface name of the device that is used for communicate with LMA is %s\n", dev_name_mn_link);
+            fclose(fp);
+            return 1;
+        }
+    }
+    fclose(fp);
+    dbg("No interface name of the device that is used for communicate with LMA found");
     return -1;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -346,7 +379,7 @@ int setup_linklocal_addr(struct in6_addr *src)
             sscanf(str_addr + i * 2, "%02x", &ap);
             addr.s6_addr[i] = (unsigned char) ap;
         }
-        if (memcmp(&conf.MagAddressIngress, &addr, sizeof(struct in6_addr)) == 0) {
+        if (memcmp(&conf.MagAddressIngress[0], &addr, sizeof(struct in6_addr)) == 0) {
             strncpy(dev_name_mn_link, devname, 32);
             flagy = 1;
             dbg("The interface name of the device that is used for communicate with MNs is %s\n", dev_name_mn_link);
@@ -383,37 +416,37 @@ int setup_linklocal_addr(struct in6_addr *src)
 //---------------------------------------------------------------------------------------------------------------------
 int mag_update_binding_entry(pmip_entry_t * bce, msg_info_t * info)
 {
-    dbg("Store binding entry\n");
-    bce->our_addr = conf.OurAddress;
-    bce->mn_suffix = info->mn_iid;
-    bce->mn_hw_address = EUI64_to_EUI48(info->mn_iid);
-    bce->mn_prefix = info->mn_prefix;
-    bce->mn_addr = info->mn_addr;
+    dbg("Update binding entry\n");
+    bce->our_addr           = conf.OurAddress;
+    bce->mn_suffix          = info->mn_iid;
+    bce->mn_hw_address      = EUI64_to_EUI48(info->mn_iid);
+    bce->mn_prefix          = info->mn_prefix;
+    bce->mn_addr            = info->mn_addr;
     bce->mn_link_local_addr = info->mn_link_local_addr;
-    bce->mn_serv_mag_addr = info->src;
-    bce->lifetime = info->lifetime;
-    bce->n_rets_counter = conf.MaxMessageRetransmissions;
-    bce->seqno_in = info->seqno;
-    bce->link = info->iif;
+    bce->mn_serv_mag_addr   = info->src;
+    bce->lifetime           = info->lifetime;
+    bce->n_rets_counter     = conf.MaxMessageRetransmissions;
+    bce->seqno_in           = info->seqno;
+    bce->link               = info->iif;
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
 int mag_pmip_md(msg_info_t * info, pmip_entry_t * bce)
 {
     if (bce != NULL) {
-        bce->our_addr = conf.OurAddress;
-        bce->mn_suffix = info->mn_iid;
-        bce->mn_prefix = info->mn_prefix;
-        dbg("Making BCE entry in MAG with HN prefix  %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&bce->mn_prefix));
-        bce->mn_serv_mag_addr = conf.OurAddress;
-        bce->mn_serv_lma_addr = conf.LmaAddress;
-        bce->seqno_out = 0;
-        bce->PBU_flags = IP6_MH_BU_ACK | IP6_MH_BU_PR;
-        bce->link = info->iif;
+        bce->our_addr           = conf.OurAddress;
+        bce->mn_suffix          = info->mn_iid;
+        bce->mn_prefix          = info->mn_prefix;
+        bce->mn_serv_mag_addr   = conf.OurAddress;
+        bce->mn_serv_lma_addr   = conf.LmaAddress;
+        bce->seqno_out          = 0;
+        bce->PBU_flags          = IP6_MH_BU_ACK | IP6_MH_BU_PR;
+        bce->link               = info->iif;
         struct in6_addr *link_local = link_local_addr(&bce->mn_suffix);
         bce->mn_link_local_addr = *link_local;  // link local address of MN
+        bce->type               = BCE_TEMP;
+        dbg("Making BCE entry in MAG with HN prefix  %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&bce->mn_prefix));
         dbg("New attachment detected! Start Location Registration procedure...\n");
-        bce->type = BCE_TEMP;
         mag_start_registration(bce);
     }
     return 0;

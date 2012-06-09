@@ -213,15 +213,15 @@ int mh_create_opt_home_net_prefix(struct iovec *iov, struct in6_addr *Home_Netwo
      * 8.3. Home Network Prefix Option
 
 
-	   A new option, Home Network Prefix option is defined for use with the
-	   Proxy Binding Update and Proxy Binding Acknowledgement messages
-	   exchanged between a local mobility anchor and a mobile access
-	   gateway.  This option is used for exchanging the mobile node's home
-	   network prefix information.  There can be multiple Home Network
-	   Prefix options present in the message.
+        A new option, Home Network Prefix option is defined for use with the
+        Proxy Binding Update and Proxy Binding Acknowledgement messages
+        exchanged between a local mobility anchor and a mobile access
+        gateway.  This option is used for exchanging the mobile node's home
+        network prefix information.  There can be multiple Home Network
+        Prefix options present in the message.
 
-	   The Home Network Prefix Option has an alignment requirement of 8n+4.
-	   Its format is as follows:
+        The Home Network Prefix Option has an alignment requirement of 8n+4.
+        Its format is as follows:
 
        0                   1                   2                   3
        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -737,7 +737,7 @@ int mh_pbu_parse(msg_info_t * info, struct ip6_mh_binding_update *pbu, ssize_t l
     info->iif = iif;
     info->addrs.src = &info->src;
     info->addrs.dst = &info->dst;
-    if (len < sizeof(struct ip6_mh_binding_update)) {
+    if (len < (ssize_t)sizeof(struct ip6_mh_binding_update)) {
         dbg("Bad len of PBU mobility header   : %d versus sizeof(struct ip6_mh_binding_update)= %d\n", len, sizeof(struct ip6_mh_binding_update));
         return 0;
     }
@@ -830,7 +830,7 @@ int mh_pba_parse(msg_info_t * info, struct ip6_mh_binding_ack *pba, ssize_t len,
         dbg("Mobile Node Identifier Option: %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&mn_identifier));
     }
 
-    if ((len < sizeof(struct ip6_mh_binding_ack)
+    if ((len < (ssize_t)sizeof(struct ip6_mh_binding_ack)
             || mh_opt_parse(&pba->ip6mhba_hdr, len, sizeof(struct ip6_mh_binding_ack), &mh_opts) < 0)) {
         return 0;
     }
@@ -880,7 +880,7 @@ int mh_pba_parse(msg_info_t * info, struct ip6_mh_binding_ack *pba, ssize_t len,
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int icmp_rs_parse(msg_info_t * info, struct nd_router_solicit *rs, const struct in6_addr *saddr, const struct in6_addr *daddr, int iif, int hoplimit)
+int icmp_rs_parse(msg_info_t * info, __attribute__ ((unused)) struct nd_router_solicit *rs, const struct in6_addr *saddr, const struct in6_addr *daddr, int iif, int hoplimit)
 {
     bzero(info, sizeof(msg_info_t));
     //info->ns_target = ns->nd_ns_target;

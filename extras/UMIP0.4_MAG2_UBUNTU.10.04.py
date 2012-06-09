@@ -4,11 +4,35 @@
 import sys
 import os
 import subprocess
+import getopt
 
 from subprocess  import *
 from netaddr import *
+
+g_path = os.getcwd()
+g_path = os.path.dirname(sys.argv[0]) + "/.."
+g_path = os.path.abspath(g_path)
+
+try:
+    opts, args = getopt.getopt(sys.argv[1:], "prd", ["pcap=", "runversion=", "pmipdir="])
+except getopt.GetoptError, err:
+    # print help information and exit:
+    print str(err) # will print something like "option -a not recognized"
+    sys.exit(2)
+
+g_pcap = "no"
+g_run_version = "1"
+
+for o,p in opts:
+  if o in ('-p','--pcap'):
+     g_pcap = p
+  elif o in ['-r','--runversion']:
+     g_run_version = str(p)
+  elif o in ['-d','--pmipdir']:
+     g_path = p
+
 ############################################################################################
-g_file_config="/usr/local/src/PMIPv6_v0.4.1/pmipv6-daemon-umip-0.4/extras/example-mag2.conf"
+g_file_config=g_path+"/extras/example-mag2.conf"
 ############################################################################################
 
 
@@ -35,7 +59,7 @@ for line in lines:
     if 'RFC5213FixedMAGLinkLocalAddressOnAllAccessLinks' in line:
         print line
         g_RFC5213FixedMAGLinkLocalAddressOnAllAccessLinks = IPAddress(element)
-        
+
     elif 'RFC5213FixedMAGLinkLayerAddressOnAllAccessLinks' in line:
         print line
         g_RFC5213FixedMAGLinkLayerAddressOnAllAccessLinks = element
@@ -112,6 +136,11 @@ command = "ip -6 route add to default via " + g_LmaAddress.format() + " dev " + 
 print command
 os.system(command)
 
+# just to resolve, avoid ping6 since it is used for sync
+command = "ssh -6 root@[" + g_LmaAddress.format() + "] \"ls /root\""
+print command
+os.system(command)
+
 command = "modprobe ip6_tunnel"
 print command
 os.system(command)
@@ -122,6 +151,17 @@ os.system(command)
 command = "pkill -9 pmip6d"
 print command
 os.system(command)
+
+if g_pcap == "yes":
+	command = "xhost +; export DISPLAY=:0.0; sync; wireshark -i eth0 -k -n -w  "+ g_path + "/logs/mag22lma."+g_run_version+".pcap &"
+	value = os.system(command)
+	print value
+
+	command = "xhost +; export DISPLAY=:0.0; sync; wireshark -i eth1 -k -n -w  "+ g_path + "/logs/mag22ap."+g_run_version+".pcap  &"
+	value = os.system(command)
+	print value
+
+
 
 command = '/usr/local/sbin/pmip6d -c ' + g_file_config
 subprocess.call(command, shell=True)

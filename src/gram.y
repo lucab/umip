@@ -221,14 +221,14 @@ static void uerror(const char *fmt, ...) {
 %token		MOBRTRUSEEXPLICITMODE
 %token          CNBINDINGPOLICYSET
 /* PMIP CONF ELEMENTS */
-%token      RFC5213TIMESTAMPBASEDAPPROACHINUSE;
-%token      RFC5213MOBILENODEGENERATEDTIMESTAMPINUSE;
-%token      RFC5213FIXEDMAGLINKLOCALADDRESSONALLACCESSLINKS;
-%token      RFC5213FIXEDMAGLINKLAYERADDRESSONALLACCESSLINKS;
-%token      RFC5213MINDELAYBEFOREBCEDELETE;
-%token      RFC5213MAXDELAYBEFORENEWBCEASSIGN;
-%token      RFC5213TIMESTAMPVALIDITYWINDOW;
-%token      RFC5213ENABLEMAGLOCALROUTING
+%token		RFC5213TIMESTAMPBASEDAPPROACHINUSE;
+%token		RFC5213MOBILENODEGENERATEDTIMESTAMPINUSE;
+%token		RFC5213FIXEDMAGLINKLOCALADDRESSONALLACCESSLINKS;
+%token		RFC5213FIXEDMAGLINKLAYERADDRESSONALLACCESSLINKS;
+%token		RFC5213MINDELAYBEFOREBCEDELETE;
+%token		RFC5213MAXDELAYBEFORENEWBCEASSIGN;
+%token		RFC5213TIMESTAMPVALIDITYWINDOW;
+%token		RFC5213ENABLEMAGLOCALROUTING
 %token		MIP6LMA
 %token		MIP6MAG
 %token		PROXYMIPLMA
@@ -240,12 +240,6 @@ static void uerror(const char *fmt, ...) {
 %token		LMACORENETWORKDEVICE
 %token		MAGADDRESSINGRESS
 %token		MAGADDRESSEGRESS
-%token		MAG1ADDRESSINGRESS
-%token		MAG1ADDRESSEGRESS
-%token		MAG2ADDRESSINGRESS
-%token		MAG2ADDRESSEGRESS
-%token		MAG3ADDRESSINGRESS
-%token		MAG3ADDRESSEGRESS
 %token		MAGDEVICEINGRESS
 %token		MAGDEVICEEGRESS
 %token		OURADDRESS
@@ -256,10 +250,11 @@ static void uerror(const char *fmt, ...) {
 %token		MAXMESSAGERETRANSMISSIONS
 %token		TUNNELINGENABLED
 %token		DYNAMICTUNNELINGENABLED
+%token		MAXDELAYBEFOREDYNAMICTUNNELINGDELETE
 %token		RADIUSPASSWORD
-%token      RADIUSCLIENTCONFIGFILE
-%token      PCAPSYSLOGASSOCIATIONGREPSTRING
-%token      PCAPSYSLOGDEASSOCIATIONGREPSTRING
+%token		RADIUSCLIENTCONFIGFILE
+%token		PCAPSYSLOGASSOCIATIONGREPSTRING
+%token		PCAPSYSLOGDEASSOCIATIONGREPSTRING
 
 %token		INV_TOKEN
 
@@ -944,21 +939,21 @@ proxymiplmaopt	: LMAADDRESS ADDR ';'
 		{
 			struct timespec lifetime;
 			lifetime.tv_sec = $2/1000;
-            lifetime.tv_nsec = ($2 % 1000)*1000000;
+			lifetime.tv_nsec = ($2 % 1000)*1000000;
 			conf.RFC5213MinDelayBeforeBCEDelete = lifetime;
 		}
 		| RFC5213MAXDELAYBEFORENEWBCEASSIGN NUMBER ';'
 		{
 			struct timespec lifetime;
-            lifetime.tv_sec = $2/1000;
-            lifetime.tv_nsec = ($2 % 1000)*1000000;
-			conf.RFC5213MaxDelayBeforeNewBCEAssign = lifetime;		
+			lifetime.tv_sec = $2/1000;
+			lifetime.tv_nsec = ($2 % 1000)*1000000;
+			conf.RFC5213MaxDelayBeforeNewBCEAssign = lifetime;
 		}
 		| RFC5213TIMESTAMPVALIDITYWINDOW NUMBER ';'
 		{
 			struct timespec lifetime;
-            lifetime.tv_sec = $2/1000;
-            lifetime.tv_nsec = ($2 % 1000)*1000000;
+			lifetime.tv_sec = $2/1000;
+			lifetime.tv_nsec = ($2 % 1000)*1000000;
 			conf.RFC5213TimestampValidityWindow = lifetime;
 		}
 		| OURADDRESS ADDR ';'
@@ -977,54 +972,46 @@ proxymiplmaopt	: LMAADDRESS ADDR ';'
 		{
 			conf.DynamicTunnelingEnabled = $2;
 		}
+		| MAXDELAYBEFOREDYNAMICTUNNELINGDELETE NUMBER ';'
+		{
+			struct timespec lifetime;
+			lifetime.tv_sec = $2/1000;
+			lifetime.tv_nsec = ($2 % 1000)*1000000;
+			conf.MaxDelayBeforeDynamicTunnelingDelete = lifetime;
+		}
 		| PBULIFETIME NUMBER ';'
 		{
 			struct timespec lifetime;
-            lifetime.tv_sec = $2/1000;
-            lifetime.tv_nsec = ($2 % 1000)*1000000;
+			lifetime.tv_sec = $2/1000;
+			lifetime.tv_nsec = ($2 % 1000)*1000000;
 			conf.PBULifeTime = lifetime;
 		}
 		| PBALIFETIME NUMBER ';'
 		{
 			struct timespec lifetime;
-            lifetime.tv_sec = $2/1000;
-            lifetime.tv_nsec = ($2 % 1000)*1000000;
+			lifetime.tv_sec = $2/1000;
+			lifetime.tv_nsec = ($2 % 1000)*1000000;
 			conf.PBALifeTime = lifetime;
 		}
 		| RETRANSMISSIONTIMEOUT NUMBER ';'
 		{
 			struct timespec lifetime;
-            lifetime.tv_sec = $2/1000;
-            lifetime.tv_nsec = ($2 % 1000)*1000000;
+			lifetime.tv_sec = $2/1000;
+			lifetime.tv_nsec = ($2 % 1000)*1000000;
 			conf.RetransmissionTimeOut = lifetime;
 		}
 		| MAXMESSAGERETRANSMISSIONS NUMBER ';'
 		{
 			conf.MaxMessageRetransmissions = $2;
 		}
-		| MAG1ADDRESSINGRESS ADDR ';'
+		| MAGADDRESSINGRESS ADDR ';'
 		{
-			memcpy(&conf.Mag1AddressIngress, &$2, sizeof(struct in6_addr));
+			memcpy(&conf.MagAddressIngress[conf.NumMags], &$2, sizeof(struct in6_addr));
 		}
-		| MAG1ADDRESSEGRESS ADDR ';'
+		| MAGADDRESSEGRESS ADDR ';'
 		{
-			memcpy(&conf.Mag1AddressEgress, &$2, sizeof(struct in6_addr));
-		}
-		| MAG2ADDRESSINGRESS ADDR ';'
-		{
-			memcpy(&conf.Mag2AddressIngress, &$2, sizeof(struct in6_addr));
-		}
-		| MAG2ADDRESSEGRESS ADDR ';'
-		{
-			memcpy(&conf.Mag2AddressEgress, &$2, sizeof(struct in6_addr));
-		}
-		| MAG3ADDRESSINGRESS ADDR ';'
-		{
-			memcpy(&conf.Mag3AddressIngress, &$2, sizeof(struct in6_addr));
-		}
-		| MAG3ADDRESSEGRESS ADDR ';'
-		{
-			memcpy(&conf.Mag3AddressEgress, &$2, sizeof(struct in6_addr));
+			memcpy(&conf.MagAddressEgress[conf.NumMags], &$2, sizeof(struct in6_addr));
+			conf.NumMags = conf.NumMags + 1;
 		}
 		;
 
@@ -1073,15 +1060,15 @@ proxymipmagopt	: LMAADDRESS ADDR ';'
 		}
 		| MAGADDRESSINGRESS ADDR ';'
 		{
-			memcpy(&conf.MagAddressIngress, &$2, sizeof(struct in6_addr));
+			memcpy(&conf.MagAddressIngress[0], &$2, sizeof(struct in6_addr));
 		}
 		| MAGADDRESSEGRESS ADDR ';'
 		{
-			memcpy(&conf.MagAddressEgress, &$2, sizeof(struct in6_addr));
+			memcpy(&conf.MagAddressEgress[0], &$2, sizeof(struct in6_addr));
 		}
 		| MAGDEVICEINGRESS QSTRING ';'
 		{
-			conf.MagDeviceIngress = $2;		
+			conf.MagDeviceIngress = $2;
 		}
 		| MAGDEVICEEGRESS QSTRING ';'
 		{
@@ -1099,25 +1086,32 @@ proxymipmagopt	: LMAADDRESS ADDR ';'
 		{
 			conf.DynamicTunnelingEnabled = $2;
 		}
+		| MAXDELAYBEFOREDYNAMICTUNNELINGDELETE NUMBER ';'
+		{
+			struct timespec lifetime;
+			lifetime.tv_sec = $2/1000;
+			lifetime.tv_nsec = ($2 % 1000)*1000000;
+			conf.MaxDelayBeforeDynamicTunnelingDelete = lifetime;
+		}
 		| PBULIFETIME NUMBER ';'
 		{
 			struct timespec lifetime;
-            lifetime.tv_sec = $2/1000;
-            lifetime.tv_nsec = ($2 % 1000)*1000000;
+			lifetime.tv_sec = $2/1000;
+			lifetime.tv_nsec = ($2 % 1000)*1000000;
 			conf.PBULifeTime = lifetime;
 		}
 		| PBALIFETIME NUMBER ';'
 		{
 			struct timespec lifetime;
-            lifetime.tv_sec = $2/1000;
-            lifetime.tv_nsec = ($2 % 1000)*1000000;
+			lifetime.tv_sec = $2/1000;
+			lifetime.tv_nsec = ($2 % 1000)*1000000;
 			conf.PBALifeTime = lifetime;
 		}
 		| RETRANSMISSIONTIMEOUT NUMBER ';'
 		{
 			struct timespec lifetime;
-            lifetime.tv_sec = $2/1000;
-            lifetime.tv_nsec = ($2 % 1000)*1000000;
+			lifetime.tv_sec = $2/1000;
+			lifetime.tv_nsec = ($2 % 1000)*1000000;
 			conf.RetransmissionTimeOut = lifetime;
 		}
 		| MAXMESSAGERETRANSMISSIONS NUMBER ';'

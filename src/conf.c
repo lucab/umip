@@ -209,6 +209,7 @@ static int conf_cmdline(struct mip6_config *cfg, int argc, char **argv)
 
 static void conf_default(struct mip6_config *c)
 {
+    int i;
 	memset(c, 0, sizeof(*c));
 
 	/* Common options */
@@ -224,7 +225,7 @@ static void conf_default(struct mip6_config *c)
 
 	/* IPsec options */
 	c->TunnelPayloadForceSANego = 1;
-	c->UseMnHaIPsec = 1;
+    c->UseMnHaIPsec = 0;
 	INIT_LIST_HEAD(&c->ipsec_policies);
 
 	/* MN options */
@@ -238,8 +239,8 @@ static void conf_default(struct mip6_config *c)
 	c->MoveModulePath = NULL; /* internal */
 	c->DoRouteOptimizationMN = 1;
 	c->MobRtrUseExplicitMode = 1;
-	c->SendMobPfxSols = 1;
-	c->OptimisticHandoff = 0;
+    c->SendMobPfxSols = 1;
+    c->OptimisticHandoff = 0;
 	c->NoHomeReturn = 0;
 
 	/* HA options */
@@ -254,6 +255,10 @@ static void conf_default(struct mip6_config *c)
     c->RFC5213MobileNodeGeneratedTimestampInUse = 1;
     c->RFC5213FixedMAGLinkLocalAddressOnAllAccessLinks = in6addr_any;
     c->RFC5213FixedMAGLinkLayerAddressOnAllAccessLinks = in6addr_any;
+    struct timespec lifetime_tunnels;
+    lifetime_tunnels.tv_sec  = 60;
+    lifetime_tunnels.tv_nsec = 0;
+    c->MaxDelayBeforeDynamicTunnelingDelete   = lifetime_tunnels; // 60000 milliseconds
 
     /* PMIP LMA options */
     struct timespec lifetime1;
@@ -270,6 +275,12 @@ static void conf_default(struct mip6_config *c)
     c->RFC5213TimestampValidityWindow         = lifetime3; // 300 milliseconds
 
 	INIT_LIST_HEAD(&c->nemo_ha_served_prefixes);
+    // HA options
+    c->SendMobPfxAdvs       = 1;
+    c->SendUnsolMobPfxAdvs  = 1;
+    c->MaxMobPfxAdvInterval = 86400; // seconds
+    c->MinMobPfxAdvInterval = 600; // seconds
+    c->HaMaxBindingLife     = MAX_BINDING_LIFETIME;
 
 	/* CN bindings */
 	c->DoRouteOptimizationCN = 1;
@@ -278,8 +289,11 @@ static void conf_default(struct mip6_config *c)
     /* PMIP MAG options */
     c->RFC5213EnableMAGLocalRouting = 0;
     c->HomeNetworkPrefix             = in6addr_any;
-    c->MagAddressIngress             = in6addr_loopback;
-    c->MagAddressEgress              = in6addr_loopback;
+    c->NumMags                       = 0;
+    for (i = 0; i <  PMIP_MAX_MAGS; i++) {
+        c->MagAddressIngress[i]      = in6addr_loopback;
+        c->MagAddressEgress[i]       = in6addr_loopback;
+    }
     c->MagDeviceIngress              = "";
     c->MagDeviceEgress               = "";
     c->LmaAddress                    = in6addr_loopback;
@@ -347,6 +361,7 @@ void conf_show(struct mip6_config *c)
 {
 	struct list_head *list;
 
+    int i;
 	/* Common options */
 	dbg("config_file = %s\n", c->config_file);
 #ifdef ENABLE_VT
@@ -435,9 +450,18 @@ void conf_show(struct mip6_config *c)
 
     dbg("AllLmaMulticastAddress            = %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&c->AllLmaMulticastAddress));
     dbg("LmaAddress                        = %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&c->LmaAddress));
+
+    if (is_lma()) {
+        for (i = 0; i < c->NumMags; i++) {
+            dbg("MAG %d: \n", i);
+            dbg("    MagAddressIngress                             = %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&c->MagAddressIngress[i]));
+            dbg("    MagAddressEgress                              = %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&c->MagAddressEgress[i]));
+        }
+    }
+
     if (is_mag()) {
-        dbg("MagAddressIngress                 = %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&c->MagAddressIngress));
-        dbg("MagAddressEgress                  = %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&c->MagAddressEgress));
+        dbg("MagAddressIngress                                 = %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&c->MagAddressIngress[0]));
+        dbg("MagAddressEgress                                  = %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(&c->MagAddressEgress[0]));
         dbg("MagDeviceIngress                  = %s\n", (c->MagDeviceIngress ? c->MagDeviceIngress : "No device"));
         dbg("MagDeviceEgress                   = %s\n", (c->MagDeviceEgress ? c->MagDeviceEgress : "No device"));
         dbg("PBULifeTime                       = %u.%9u seconds\n",c->PBULifeTime.tv_sec,c->PBULifeTime.tv_nsec);
@@ -453,6 +477,7 @@ void conf_show(struct mip6_config *c)
     dbg("MaxMessageRetransmissions         = %u\n", c->MaxMessageRetransmissions);
     dbg("TunnelingEnabled                  = %s\n", CONF_BOOL_STR(c->TunnelingEnabled));
     dbg("DynamicTunnelingEnabled           = %s\n", CONF_BOOL_STR(c->DynamicTunnelingEnabled));
+    dbg("MaxDelayBeforeDynamicTunnelingDelete              = %u.%9u seconds\n",c->MaxDelayBeforeDynamicTunnelingDelete.tv_sec,c->MaxDelayBeforeDynamicTunnelingDelete.tv_nsec);
 
 	    
 	list_for_each(list, &c->cn_binding_pol) {
