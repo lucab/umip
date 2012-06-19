@@ -24,24 +24,6 @@
  * Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
  * 02111-1307 USA.
  */
-/*
- * This file is part of the PMIP, Proxy Mobile IPv6 for Linux.
- *
- * Authors: OPENAIR3 <openair_tech@eurecom.fr>
- *
- * Copyright 2010-2011 EURECOM (Sophia-Antipolis, FRANCE)
- * 
- * Proxy Mobile IPv6 (or PMIPv6, or PMIP) is a network-based mobility 
- * management protocol standardized by IETF. It is a protocol for building 
- * a common and access technology independent of mobile core networks, 
- * accommodating various access technologies such as WiMAX, 3GPP, 3GPP2 
- * and WLAN based access architectures. Proxy Mobile IPv6 is the only 
- * network-based mobility management protocol standardized by IETF.
- * 
- * PMIP Proxy Mobile IPv6 for Linux has been built above MIPL free software;
- * which it involves that it is under the same terms of GNU General Public
- * License version 2. See MIPL terms condition if you need more details. 
- */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -225,7 +207,7 @@ static void conf_default(struct mip6_config *c)
 
 	/* IPsec options */
 	c->TunnelPayloadForceSANego = 1;
-    c->UseMnHaIPsec = 0;
+	c->UseMnHaIPsec = 1;
 	INIT_LIST_HEAD(&c->ipsec_policies);
 
 	/* MN options */
@@ -239,8 +221,8 @@ static void conf_default(struct mip6_config *c)
 	c->MoveModulePath = NULL; /* internal */
 	c->DoRouteOptimizationMN = 1;
 	c->MobRtrUseExplicitMode = 1;
-    c->SendMobPfxSols = 1;
-    c->OptimisticHandoff = 0;
+	c->SendMobPfxSols = 1;
+	c->OptimisticHandoff = 0;
 	c->NoHomeReturn = 0;
 
 	/* HA options */
@@ -249,6 +231,8 @@ static void conf_default(struct mip6_config *c)
 	c->MaxMobPfxAdvInterval = 86400; /* seconds */
 	c->MinMobPfxAdvInterval = 600; /* seconds */
 	c->HaMaxBindingLife = MAX_BINDING_LIFETIME;
+	INIT_LIST_HEAD(&c->nemo_ha_served_prefixes);
+
 
     /* PMIP global options */
     c->RFC5213TimestampBasedApproachInUse = 1;
@@ -274,13 +258,6 @@ static void conf_default(struct mip6_config *c)
     lifetime3.tv_nsec = 300000000;
     c->RFC5213TimestampValidityWindow         = lifetime3; // 300 milliseconds
 
-	INIT_LIST_HEAD(&c->nemo_ha_served_prefixes);
-    // HA options
-    c->SendMobPfxAdvs       = 1;
-    c->SendUnsolMobPfxAdvs  = 1;
-    c->MaxMobPfxAdvInterval = 86400; // seconds
-    c->MinMobPfxAdvInterval = 600; // seconds
-    c->HaMaxBindingLife     = MAX_BINDING_LIFETIME;
 
 	/* CN bindings */
 	c->DoRouteOptimizationCN = 1;
